@@ -1,5 +1,5 @@
 import { useSession } from "@tanstack/react-start/server";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 
 export type StoreSession = { unlockedAt?: number };
 
@@ -60,16 +60,6 @@ export async function closeSession(): Promise<void> {
 
 export function sessionExpiryFrom(unlockedAt: number): number {
   return unlockedAt + NINETY_DAYS_SECONDS * 1000;
-}
-
-/**
- * Hash both sides to fixed-length digests before comparing: timingSafeEqual
- * throws on a length mismatch and raw length would leak through timing.
- */
-export function passwordMatches(input: string, expected: string): boolean {
-  const given = createHash("sha256").update(input, "utf8").digest();
-  const wanted = createHash("sha256").update(expected, "utf8").digest();
-  return timingSafeEqual(given, wanted);
 }
 
 export function hashIp(ip: string): string {

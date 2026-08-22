@@ -82,7 +82,7 @@ export const createAsset = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireUnlocked();
     const id = await insertAsset(data);
-    if (data.previewEnabled) await refreshPreviewFor(id);
+    if (data.previewEnabled) await refreshPreviewFor(id, data.url);
     return { id };
   });
 
@@ -91,7 +91,7 @@ export const updateAsset = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireUnlocked();
     await updateAssetRow(data.id, data);
-    if (data.previewEnabled) await refreshPreviewFor(data.id);
+    if (data.previewEnabled) await refreshPreviewFor(data.id, data.url);
     return { ok: true as const };
   });
 

@@ -1,4 +1,5 @@
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { InStatement, Row, Value } from "@libsql/client";
+import { db } from "./db.server";
 import { hashIp } from "./session.server";
 import {
   MAX_SECTIONS,
@@ -31,10 +32,135 @@ export function slugify(name: string): string {
   return base.length > 0 ? base : `section-${newId().slice(0, 6)}`;
 }
 
+/* ---------- row decoding ---------- */
+
+function optionalText(value: Value | undefined): string | null {
+  return value === undefined || value === null ? null : String(value);
+}
+
+function requiredText(value: Value | undefined, column: string): string {
+  if (value === undefined || value === null) {
+    throw new Error(`Corrupt database row: expected text in column "${column}"`);
+  }
+  return String(value);
+}
+
+function requiredInteger(value: Value | undefined, column: string): number {
+  if (value === undefined || value === null) {
+    throw new Error(`Corrupt database row: expected integer in column "${column}"`);
+  }
+  return Number(value);
+}
+
+type SectionRecord = {
+  id: string;
+  name: string;
+  slug: string;
+  colorToken: string;
+  svgUrl: string | null;
+  sortOrder: number;
+};
+
+function sectionRecord(row: Row): SectionRecord {
+  return {
+    id: requiredText(row["id"], "id"),
+    name: requiredText(row["name"], "name"),
+    slug: requiredText(row["slug"], "slug"),
+    colorToken: requiredText(row["color_token"], "color_token"),
+    svgUrl: optionalText(row["svg_url"]),
+    sortOrder: requiredInteger(row["sort_order"], "sort_order"),
+  };
+}
+
+type AssetRecord = {
+  id: string;
+  sectionId: string;
+  url: string;
+  title: string | null;
+  iconSvgUrl: string | null;
+  previewEnabled: boolean;
+  actionMode: ActionMode;
+  sortOrder: number;
+};
+
+function assetRecord(row: Row): AssetRecord {
+  return {
+    id: requiredText(row["id"], "id"),
+    sectionId: requiredText(row["section_id"], "section_id"),
+    url: requiredText(row["url"], "url"),
+    title: optionalText(row["title"]),
+    iconSvgUrl: optionalText(row["icon_svg_url"]),
+    previewEnabled: requiredInteger(row["preview_enabled"], "preview_enabled") === 1,
+    actionMode: requiredText(row["action_mode"], "action_mode") === "copy" ? "copy" : "open",
+    sortOrder: requiredInteger(row["sort_order"], "sort_order"),
+  };
+}
+
+type PreviewRecord = {
+  ogTitle: string | null;
+  ogDescription: string | null;
+  ogImageUrl: string | null;
+  ogSiteName: string | null;
+  status: string;
+  fetchedAt: number;
+  errorMessage: string | null;
+};
+
+function previewRecord(row: Row): PreviewRecord {
+  return {
+    ogTitle: optionalText(row["og_title"]),
+    ogDescription: optionalText(row["og_description"]),
+    ogImageUrl: optionalText(row["og_image_url"]),
+    ogSiteName: optionalText(row["og_site_name"]),
+    status: requiredText(row["status"], "status"),
+    fetchedAt: requiredInteger(row["fetched_at"], "fetched_at"),
+    errorMessage: optionalText(row["error_message"]),
+  };
+}
+
+type AssetLinkRecord = {
+  id: string;
+  assetId: string;
+  svgUrl: string | null;
+  label: string | null;
+  url: string;
+  mode: ActionMode;
+  sortOrder: number;
+};
+
+function assetLinkRecord(row: Row): AssetLinkRecord {
+  return {
+    id: requiredText(row["id"], "id"),
+    assetId: requiredText(row["asset_id"], "asset_id"),
+    svgUrl: optionalText(row["svg_url"]),
+    label: optionalText(row["label"]),
+    url: requiredText(row["url"], "url"),
+    mode: requiredText(row["mode"], "mode") === "copy" ? "copy" : "open",
+    sortOrder: requiredInteger(row["sort_order"], "sort_order"),
+  };
+}
+
+type SvgRecord = { id: string; name: string; url: string; sortOrder: number };
+
+function svgRecord(row: Row): SvgRecord {
+  return {
+    id: requiredText(row["id"], "id"),
+    name: requiredText(row["name"], "name"),
+    url: requiredText(row["url"], "url"),
+    sortOrder: requiredInteger(row["sort_order"], "sort_order"),
+  };
+}
+
+/* ---------- reads ---------- */
+
 export async function uniqueSlug(name: string, ignoreId?: string): Promise<string> {
   const base = slugify(name);
-  const { data } = await supabaseAdmin.from("sections").select("id, slug");
-  const taken = new Set((data ?? []).filter((row) => row.id !== ignoreId).map((row) => row.slug));
+  const result = await db().execute("SELECT id, slug FROM sections");
+  const taken = new Set(
+    result.rows
+      .filter((row) => requiredText(row["id"], "id") !== ignoreId)
+      .map((row) => requiredText(row["slug"], "slug")),
+  );
   if (!taken.has(base)) return base;
   let suffix = 2;
   while (taken.has(`${base}-${suffix}`)) suffix += 1;
@@ -42,109 +168,113 @@ export async function uniqueSlug(name: string, ignoreId?: string): Promise<strin
 }
 
 export async function nextSectionColor(): Promise<SectionColor> {
-  const { data } = await supabaseAdmin.from("sections").select("color_token");
-  const used = new Set((data ?? []).map((row) => row.color_token));
+  const result = await db().execute("SELECT color_token FROM sections");
+  const used = new Set(result.rows.map((row) => String(row["color_token"])));
   return SECTION_COLORS.find((color) => !used.has(color)) ?? SECTION_COLORS[0];
 }
 
 export async function sectionCount(): Promise<number> {
-  const { count } = await supabaseAdmin
-    .from("sections")
-    .select("id", { count: "exact", head: true });
-  return count ?? 0;
+  const result = await db().execute("SELECT COUNT(*) AS count FROM sections");
+  return requiredInteger(result.rows[0]?.["count"], "count");
 }
 
 export async function nextSectionOrder(): Promise<number> {
-  const { data } = await supabaseAdmin
-    .from("sections")
-    .select("sort_order")
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  return (data?.[0]?.sort_order ?? -1) + 1;
+  const result = await db().execute(
+    "SELECT sort_order FROM sections ORDER BY sort_order DESC LIMIT 1",
+  );
+  const top = result.rows[0];
+  return (top ? requiredInteger(top["sort_order"], "sort_order") : -1) + 1;
 }
 
 export async function nextAssetOrder(sectionId: string): Promise<number> {
-  const { data } = await supabaseAdmin
-    .from("assets")
-    .select("sort_order")
-    .eq("section_id", sectionId)
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  return (data?.[0]?.sort_order ?? -1) + 1;
+  const result = await db().execute({
+    sql: "SELECT sort_order FROM assets WHERE section_id = ? ORDER BY sort_order DESC LIMIT 1",
+    args: [sectionId],
+  });
+  const top = result.rows[0];
+  return (top ? requiredInteger(top["sort_order"], "sort_order") : -1) + 1;
 }
 
 export async function loadVault(): Promise<Vault> {
-  const [sectionRows, assetRows, previewRows, linkRows, svgRows] = await Promise.all([
-    supabaseAdmin.from("sections").select("*").order("sort_order"),
-    supabaseAdmin.from("assets").select("*").order("sort_order"),
-    supabaseAdmin.from("preview_cache").select("*"),
-    supabaseAdmin.from("asset_rows").select("*").order("sort_order"),
-    supabaseAdmin.from("svg_library").select("*").order("sort_order"),
+  const [sectionResult, assetResult, previewResult, linkResult, svgResult] = await Promise.all([
+    db().execute("SELECT * FROM sections ORDER BY sort_order"),
+    db().execute("SELECT * FROM assets ORDER BY sort_order"),
+    db().execute("SELECT * FROM preview_cache"),
+    db().execute("SELECT * FROM asset_rows ORDER BY sort_order"),
+    db().execute("SELECT * FROM svg_library ORDER BY sort_order"),
   ]);
 
-  const previews = new Map((previewRows.data ?? []).map((row) => [row.asset_id, row]));
+  const previews = new Map(
+    previewResult.rows.map((row) => {
+      const record = previewRecord(row);
+      return [requiredText(row["asset_id"], "asset_id"), record] as const;
+    }),
+  );
 
   const rowsByAsset = new Map<string, AssetRow[]>();
-  for (const row of linkRows.data ?? []) {
-    const bucket = rowsByAsset.get(row.asset_id) ?? [];
+  for (const row of linkResult.rows) {
+    const record = assetLinkRecord(row);
+    const bucket = rowsByAsset.get(record.assetId) ?? [];
     bucket.push({
-      id: row.id,
-      svgUrl: row.svg_url,
-      label: row.label,
-      url: row.url,
-      mode: row.mode === "copy" ? "copy" : "open",
-      sortOrder: row.sort_order,
+      id: record.id,
+      svgUrl: record.svgUrl,
+      label: record.label,
+      url: record.url,
+      mode: record.mode,
+      sortOrder: record.sortOrder,
     });
-    rowsByAsset.set(row.asset_id, bucket);
+    rowsByAsset.set(record.assetId, bucket);
   }
 
   const assetsBySection = new Map<string, Asset[]>();
-  for (const row of assetRows.data ?? []) {
-    const cached = previews.get(row.id);
+  for (const row of assetResult.rows) {
+    const record = assetRecord(row);
+    const cached = previews.get(record.id);
     const asset: Asset = {
-      id: row.id,
-      sectionId: row.section_id,
-      url: row.url,
-      title: row.title,
-      iconSvgUrl: row.icon_svg_url,
-      previewEnabled: row.preview_enabled === 1,
-      actionMode: row.action_mode === "copy" ? "copy" : "open",
-      sortOrder: row.sort_order,
-      rows: rowsByAsset.get(row.id) ?? [],
+      id: record.id,
+      sectionId: record.sectionId,
+      url: record.url,
+      title: record.title,
+      iconSvgUrl: record.iconSvgUrl,
+      previewEnabled: record.previewEnabled,
+      actionMode: record.actionMode,
+      sortOrder: record.sortOrder,
+      rows: rowsByAsset.get(record.id) ?? [],
       preview: cached
         ? {
-            ogTitle: cached.og_title,
-            ogDescription: cached.og_description,
-            ogImageUrl: cached.og_image_url,
-            ogSiteName: cached.og_site_name,
+            ogTitle: cached.ogTitle,
+            ogDescription: cached.ogDescription,
+            ogImageUrl: cached.ogImageUrl,
+            ogSiteName: cached.ogSiteName,
             status:
               cached.status === "ok" || cached.status === "failed" ? cached.status : "pending",
-            fetchedAt: Number(cached.fetched_at),
-            errorMessage: cached.error_message,
+            fetchedAt: cached.fetchedAt,
+            errorMessage: cached.errorMessage,
           }
         : null,
     };
-    const bucket = assetsBySection.get(row.section_id) ?? [];
+    const bucket = assetsBySection.get(record.sectionId) ?? [];
     bucket.push(asset);
-    assetsBySection.set(row.section_id, bucket);
+    assetsBySection.set(record.sectionId, bucket);
   }
 
-  const sections: Section[] = (sectionRows.data ?? []).map((row, index) => ({
-    id: row.id,
-    name: row.name,
-    slug: row.slug,
-    colorToken: coerceColor(row.color_token, index),
-    svgUrl: row.svg_url,
-    sortOrder: row.sort_order,
-    assets: assetsBySection.get(row.id) ?? [],
-  }));
+  const sections: Section[] = sectionResult.rows.map((row, index) => {
+    const record = sectionRecord(row);
+    return {
+      id: record.id,
+      name: record.name,
+      slug: record.slug,
+      colorToken: coerceColor(record.colorToken, index),
+      svgUrl: record.svgUrl,
+      sortOrder: record.sortOrder,
+      assets: assetsBySection.get(record.id) ?? [],
+    };
+  });
 
-  const svgs: SvgIcon[] = (svgRows.data ?? []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    url: row.url,
-    sortOrder: row.sort_order,
-  }));
+  const svgs: SvgIcon[] = svgResult.rows.map((row) => {
+    const record = svgRecord(row);
+    return { id: record.id, name: record.name, url: record.url, sortOrder: record.sortOrder };
+  });
 
   return { sections, svgs };
 }
@@ -168,112 +298,117 @@ export type AssetInput = {
   rows: readonly RowInput[];
 };
 
-async function replaceRows(assetId: string, rows: readonly RowInput[]): Promise<void> {
-  await supabaseAdmin.from("asset_rows").delete().eq("asset_id", assetId);
-  if (rows.length === 0) return;
-  const now = Date.now();
-  const { error } = await supabaseAdmin.from("asset_rows").insert(
-    rows.map((row, index) => ({
-      id: newId(),
-      asset_id: assetId,
-      svg_url: row.svgUrl,
-      label: row.label,
-      url: row.url,
-      mode: row.mode,
-      sort_order: index,
-      created_at: now,
-      updated_at: now,
-    })),
-  );
-  if (error) throw new Error(error.message);
+const INSERT_ASSET_ROW =
+  "INSERT INTO asset_rows (id, asset_id, svg_url, label, url, mode, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+function rowStatements(assetId: string, rows: readonly RowInput[], now: number): InStatement[] {
+  return rows.map((row, index) => ({
+    sql: INSERT_ASSET_ROW,
+    args: [newId(), assetId, row.svgUrl, row.label, row.url, row.mode, index, now, now],
+  }));
 }
 
 export async function insertAsset(input: AssetInput): Promise<string> {
   const id = newId();
   const now = Date.now();
-  const { error } = await supabaseAdmin.from("assets").insert({
-    id,
-    section_id: input.sectionId,
-    url: input.url,
-    title: input.title,
-    icon_svg_url: input.iconSvgUrl,
-    preview_enabled: input.previewEnabled ? 1 : 0,
-    action_mode: input.actionMode,
-    sort_order: await nextAssetOrder(input.sectionId),
-    created_at: now,
-    updated_at: now,
-  });
-  if (error) throw new Error(error.message);
-  await replaceRows(id, input.rows);
+  await db().batch(
+    [
+      {
+        sql: `INSERT INTO assets (id, section_id, url, title, icon_svg_url, preview_enabled, action_mode, sort_order, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM assets WHERE section_id = ?), 0), ?, ?)`,
+        args: [
+          id,
+          input.sectionId,
+          input.url,
+          input.title,
+          input.iconSvgUrl,
+          input.previewEnabled ? 1 : 0,
+          input.actionMode,
+          input.sectionId,
+          now,
+          now,
+        ],
+      },
+      ...rowStatements(id, input.rows, now),
+    ],
+    "write",
+  );
   return id;
 }
 
 export async function updateAsset(id: string, input: AssetInput): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from("assets")
-    .update({
-      url: input.url,
-      title: input.title,
-      icon_svg_url: input.iconSvgUrl,
-      preview_enabled: input.previewEnabled ? 1 : 0,
-      action_mode: input.actionMode,
-      updated_at: Date.now(),
-    })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
-  await replaceRows(id, input.rows);
+  const now = Date.now();
+  await db().batch(
+    [
+      {
+        sql: "UPDATE assets SET url = ?, title = ?, icon_svg_url = ?, preview_enabled = ?, action_mode = ?, updated_at = ? WHERE id = ?",
+        args: [
+          input.url,
+          input.title,
+          input.iconSvgUrl,
+          input.previewEnabled ? 1 : 0,
+          input.actionMode,
+          now,
+          id,
+        ],
+      },
+      { sql: "DELETE FROM asset_rows WHERE asset_id = ?", args: [id] },
+      ...rowStatements(id, input.rows, now),
+    ],
+    "write",
+  );
 }
 
 export async function applyOrder(
   table: "sections" | "assets",
   ids: readonly string[],
 ): Promise<void> {
-  await Promise.all(
-    ids.map((id, index) =>
-      supabaseAdmin.from(table).update({ sort_order: index, updated_at: Date.now() }).eq("id", id),
-    ),
+  const target = table === "sections" ? "sections" : "assets";
+  const now = Date.now();
+  await db().batch(
+    ids.map((id, index) => ({
+      sql: `UPDATE ${target} SET sort_order = ?, updated_at = ? WHERE id = ?`,
+      args: [index, now, id],
+    })),
+    "write",
   );
 }
 
 /* ---------- svg library ---------- */
 
 export async function createSvg(name: string, url: string): Promise<string> {
-  const id = newId();
-  const now = Date.now();
-  const { count } = await supabaseAdmin
-    .from("svg_library")
-    .select("id", { count: "exact", head: true });
-  if ((count ?? 0) >= MAX_SVGS) {
+  const result = await db().execute(
+    "SELECT sort_order FROM svg_library ORDER BY sort_order DESC",
+  );
+  if (result.rows.length >= MAX_SVGS) {
     throw new Error(`The library holds ${MAX_SVGS} marks — delete one to add another.`);
   }
-  const { data } = await supabaseAdmin
-    .from("svg_library")
-    .select("sort_order")
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  const { error } = await supabaseAdmin.from("svg_library").insert({
-    id,
-    name,
-    url,
-    sort_order: (data?.[0]?.sort_order ?? -1) + 1,
-    created_at: now,
-    updated_at: now,
+  const top = result.rows[0];
+  const id = newId();
+  const now = Date.now();
+  await db().execute({
+    sql: "INSERT INTO svg_library (id, name, url, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    args: [
+      id,
+      name,
+      url,
+      (top ? requiredInteger(top["sort_order"], "sort_order") : -1) + 1,
+      now,
+      now,
+    ],
   });
-  if (error) throw new Error(error.message);
   return id;
 }
 
 export async function updateSvg(id: string, name: string, url: string): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from("svg_library")
-    .update({ name, url, updated_at: Date.now() })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+  await db().execute({
+    sql: "UPDATE svg_library SET name = ?, url = ?, updated_at = ? WHERE id = ?",
+    args: [name, url, Date.now(), id],
+  });
 }
 
 export async function deleteSvg(id: string): Promise<void> {
-  const { error } = await supabaseAdmin.from("svg_library").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  await db().execute({ sql: "DELETE FROM svg_library WHERE id = ?", args: [id] });
 }
 
 /* ---------- rate limiting ---------- */
@@ -282,31 +417,34 @@ const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
 export async function lockoutRemainingMs(ip: string): Promise<number> {
-  const since = Date.now() - WINDOW_MS;
-  const { data } = await supabaseAdmin
-    .from("login_attempts")
-    .select("attempted_at")
-    .eq("ip_hash", hashIp(ip))
-    .gte("attempted_at", since)
-    .order("attempted_at", { ascending: true });
-  const attempts = data ?? [];
+  const result = await db().execute({
+    sql: "SELECT attempted_at FROM login_attempts WHERE ip_hash = ? AND attempted_at >= ? ORDER BY attempted_at ASC",
+    args: [hashIp(ip), Date.now() - WINDOW_MS],
+  });
+  const attempts = result.rows.map((row) => requiredInteger(row["attempted_at"], "attempted_at"));
   if (attempts.length < MAX_ATTEMPTS) return 0;
-  const oldest = Number(attempts[attempts.length - MAX_ATTEMPTS]?.attempted_at ?? Date.now());
+  const oldest = attempts[attempts.length - MAX_ATTEMPTS] ?? Date.now();
   return Math.max(0, oldest + WINDOW_MS - Date.now());
 }
 
 export async function recordFailedAttempt(ip: string): Promise<void> {
-  await supabaseAdmin
-    .from("login_attempts")
-    .insert({ ip_hash: hashIp(ip), attempted_at: Date.now() });
-  await supabaseAdmin
-    .from("login_attempts")
-    .delete()
-    .lt("attempted_at", Date.now() - 24 * 60 * 60 * 1000);
+  await db().batch(
+    [
+      {
+        sql: "INSERT INTO login_attempts (ip_hash, attempted_at) VALUES (?, ?)",
+        args: [hashIp(ip), Date.now()],
+      },
+      {
+        sql: "DELETE FROM login_attempts WHERE attempted_at < ?",
+        args: [Date.now() - 24 * 60 * 60 * 1000],
+      },
+    ],
+    "write",
+  );
 }
 
 export async function clearAttempts(ip: string): Promise<void> {
-  await supabaseAdmin.from("login_attempts").delete().eq("ip_hash", hashIp(ip));
+  await db().execute({ sql: "DELETE FROM login_attempts WHERE ip_hash = ?", args: [hashIp(ip)] });
 }
 
 /* ---------- preview fetching (SSRF-guarded) ---------- */
@@ -332,7 +470,7 @@ export function isSafePublicUrl(raw: string): boolean {
 
 const MAX_HTML_BYTES = 600_000;
 
-const BROWSER_HEADERS: Record<string, string> = {
+const BROWSER_HEADERS = {
   "user-agent":
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -500,7 +638,13 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
 
   const image =
     absolute(
-      metaContent(html, ["og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src"]),
+      metaContent(html, [
+        "og:image",
+        "og:image:url",
+        "og:image:secure_url",
+        "twitter:image",
+        "twitter:image:src",
+      ]),
       finalUrl,
     ) ??
     absolute(jsonLdValue(html, ["image", "thumbnailUrl"]), finalUrl) ??
@@ -517,32 +661,53 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
 }
 
 export async function storePreview(assetId: string, result: ScrapeResult): Promise<void> {
-  await supabaseAdmin.from("preview_cache").upsert({
-    asset_id: assetId,
-    og_title: result.ogTitle,
-    og_description: result.ogDescription,
-    og_image_url: result.ogImageUrl,
-    og_site_name: result.ogSiteName,
-    status: result.status,
-    fetched_at: Date.now(),
-    error_message: result.errorMessage,
+  await db().execute({
+    sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(asset_id) DO UPDATE SET
+            og_title = excluded.og_title,
+            og_description = excluded.og_description,
+            og_image_url = excluded.og_image_url,
+            og_site_name = excluded.og_site_name,
+            status = excluded.status,
+            fetched_at = excluded.fetched_at,
+            error_message = excluded.error_message`,
+    args: [
+      assetId,
+      result.ogTitle,
+      result.ogDescription,
+      result.ogImageUrl,
+      result.ogSiteName,
+      result.status,
+      Date.now(),
+      result.errorMessage,
+    ],
   });
 }
 
-export async function refreshPreviewFor(assetId: string): Promise<void> {
-  const { data } = await supabaseAdmin
-    .from("assets")
-    .select("url, preview_enabled")
-    .eq("id", assetId)
-    .maybeSingle();
-  if (!data || data.preview_enabled !== 1) return;
-  await storePreview(assetId, await scrapePreview(data.url));
+export async function refreshPreviewFor(assetId: string, knownUrl?: string): Promise<void> {
+  let url = knownUrl;
+  if (!url) {
+    const result = await db().execute({
+      sql: "SELECT url, preview_enabled FROM assets WHERE id = ?",
+      args: [assetId],
+    });
+    const row = result.rows[0];
+    if (!row) return;
+    if (requiredInteger(row["preview_enabled"], "preview_enabled") !== 1) return;
+    url = requiredText(row["url"], "url");
+  }
+  await storePreview(assetId, await scrapePreview(url));
 }
 
 export async function refreshAllPreviews(sectionId?: string): Promise<number> {
-  const base = supabaseAdmin.from("assets").select("id").eq("preview_enabled", 1);
-  const { data } = sectionId ? await base.eq("section_id", sectionId) : await base;
-  const ids = (data ?? []).map((row) => row.id);
+  const result = sectionId
+    ? await db().execute({
+        sql: "SELECT id FROM assets WHERE preview_enabled = 1 AND section_id = ?",
+        args: [sectionId],
+      })
+    : await db().execute("SELECT id FROM assets WHERE preview_enabled = 1");
+  const ids = result.rows.map((row) => requiredText(row["id"], "id"));
   const BATCH = 4;
   for (let i = 0; i < ids.length; i += BATCH) {
     await Promise.all(ids.slice(i, i + BATCH).map((id) => refreshPreviewFor(id)));
@@ -557,23 +722,40 @@ export async function createSection(
   colorToken: SectionColor | null,
   svgUrl: string | null,
 ): Promise<{ id: string; slug: string }> {
-  if ((await sectionCount()) >= MAX_SECTIONS) {
+  const existing = await db().execute(
+    "SELECT id, slug, color_token, sort_order FROM sections ORDER BY sort_order DESC",
+  );
+  if (existing.rows.length >= MAX_SECTIONS) {
     throw new Error(`STORE holds a maximum of ${MAX_SECTIONS} sections.`);
   }
+
+  const takenSlugs = new Set(existing.rows.map((row) => requiredText(row["slug"], "slug")));
+  const base = slugify(name);
+  let slug = base;
+  if (takenSlugs.has(base)) {
+    let suffix = 2;
+    while (takenSlugs.has(`${base}-${suffix}`)) suffix += 1;
+    slug = `${base}-${suffix}`;
+  }
+
+  const usedColors = new Set(existing.rows.map((row) => String(row["color_token"])));
+  const color = colorToken ?? SECTION_COLORS.find((c) => !usedColors.has(c)) ?? SECTION_COLORS[0];
+  const top = existing.rows[0];
+  const sortOrder = (top ? requiredInteger(top["sort_order"], "sort_order") : -1) + 1;
+
   const id = newId();
   const now = Date.now();
-  const slug = await uniqueSlug(name);
-  const { error } = await supabaseAdmin.from("sections").insert({
-    id,
-    name,
-    slug,
-    color_token: colorToken ?? (await nextSectionColor()),
-    svg_url: svgUrl,
-    sort_order: await nextSectionOrder(),
-    created_at: now,
-    updated_at: now,
-  });
-  if (error) throw new Error(error.message);
+  try {
+    await db().execute({
+      sql: "INSERT INTO sections (id, name, slug, color_token, svg_url, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      args: [id, name, slug, color, svgUrl, sortOrder, now, now],
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
+      throw new Error("That name produces a duplicate section address — pick another name.");
+    }
+    throw error;
+  }
   return { id, slug };
 }
 
@@ -584,25 +766,56 @@ export async function updateSection(
   svgUrl: string | null,
 ): Promise<{ slug: string }> {
   const slug = await uniqueSlug(name, id);
-  const { error } = await supabaseAdmin
-    .from("sections")
-    .update({ name, slug, color_token: colorToken, svg_url: svgUrl, updated_at: Date.now() })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+  try {
+    await db().execute({
+      sql: "UPDATE sections SET name = ?, slug = ?, color_token = ?, svg_url = ?, updated_at = ? WHERE id = ?",
+      args: [name, slug, colorToken, svgUrl, Date.now(), id],
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
+      throw new Error("That name produces a duplicate section address — pick another name.");
+    }
+    throw error;
+  }
   return { slug };
 }
 
 export async function recolorSection(id: string, colorToken: SectionColor): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from("sections")
-    .update({ color_token: colorToken, updated_at: Date.now() })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+  await db().execute({
+    sql: "UPDATE sections SET color_token = ?, updated_at = ? WHERE id = ?",
+    args: [colorToken, Date.now(), id],
+  });
 }
 
 export async function deleteRow(table: "sections" | "assets", id: string): Promise<void> {
-  const { error } = await supabaseAdmin.from(table).delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  // Explicit cascades in one atomic batch: no reliance on the connection's
+  // foreign_keys pragma being enabled.
+  if (table === "sections") {
+    await db().batch(
+      [
+        {
+          sql: "DELETE FROM asset_rows WHERE asset_id IN (SELECT id FROM assets WHERE section_id = ?)",
+          args: [id],
+        },
+        {
+          sql: "DELETE FROM preview_cache WHERE asset_id IN (SELECT id FROM assets WHERE section_id = ?)",
+          args: [id],
+        },
+        { sql: "DELETE FROM assets WHERE section_id = ?", args: [id] },
+        { sql: "DELETE FROM sections WHERE id = ?", args: [id] },
+      ],
+      "write",
+    );
+    return;
+  }
+  await db().batch(
+    [
+      { sql: "DELETE FROM asset_rows WHERE asset_id = ?", args: [id] },
+      { sql: "DELETE FROM preview_cache WHERE asset_id = ?", args: [id] },
+      { sql: "DELETE FROM assets WHERE id = ?", args: [id] },
+    ],
+    "write",
+  );
 }
 
 /* ---------- export / import ---------- */
@@ -612,7 +825,7 @@ export async function exportVault(): Promise<Vault & { version: 1; exportedAt: n
   return { version: 1, exportedAt: Date.now(), ...vault };
 }
 
-type ImportShape = {
+type VaultBackup = {
   sections?: {
     name?: string;
     colorToken?: string;
@@ -630,7 +843,7 @@ type ImportShape = {
 };
 
 export async function importVault(payload: string): Promise<{ sections: number; svgs: number }> {
-  const parsed: ImportShape = JSON.parse(payload);
+  const parsed: VaultBackup = JSON.parse(payload);
   let sections = 0;
   let svgs = 0;
 

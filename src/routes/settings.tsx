@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import { Download, LockKeyhole, RefreshCw, Upload } from "lucide-react";
+import { getSessionState } from "@/lib/auth.functions";
 import { exportVault, importVault, refreshPreviews } from "@/lib/vault.functions";
 import { useToast, useVault } from "@/hooks/useVault";
 import { BottomNav, OfflineBanner, TopBar, useLock } from "@/components/store/chrome";
@@ -24,6 +25,10 @@ export const Route = createFileRoute("/settings")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
+  beforeLoad: async () => {
+    const state = await getSessionState();
+    if (!state.unlocked) throw redirect({ to: "/" });
+  },
   component: SettingsPage,
 });
 
@@ -36,15 +41,7 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Row({
-  title,
-  body,
-  action,
-}: {
-  title: string;
-  body: string;
-  action: ReactNode;
-}) {
+function Row({ title, body, action }: { title: string; body: string; action: ReactNode }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4">
       <div className="min-w-0">
@@ -123,59 +120,70 @@ function SettingsPage() {
         />
 
         <div className="flex flex-col gap-8">
-        <Group label="Previews">
-          <Row
-            title="Refresh all previews"
-            body="Re-fetch titles, descriptions and images."
-            action={
-              <Button variant="surface" size="sm" onClick={() => void refreshAll()} disabled={busy !== null}>
-                <RefreshCw size={15} className={busy === "refresh" ? "animate-spin" : undefined} />
-                {busy === "refresh" ? "Refreshing…" : "Refresh"}
-              </Button>
-            }
-          />
+          <Group label="Previews">
+            <Row
+              title="Refresh all previews"
+              body="Re-fetch titles, descriptions and images."
+              action={
+                <Button
+                  variant="surface"
+                  size="sm"
+                  onClick={() => void refreshAll()}
+                  disabled={busy !== null}
+                >
+                  <RefreshCw
+                    size={15}
+                    className={busy === "refresh" ? "animate-spin" : undefined}
+                  />
+                  {busy === "refresh" ? "Refreshing…" : "Refresh"}
+                </Button>
+              }
+            />
+          </Group>
 
-        </Group>
+          <Group label="Backup">
+            <Row
+              title="Export vault"
+              body="Download every section, link and mark as JSON."
+              action={
+                <Button
+                  variant="surface"
+                  size="sm"
+                  onClick={() => void download()}
+                  disabled={busy !== null}
+                >
+                  <Download size={15} /> Export
+                </Button>
+              }
+            />
 
-        <Group label="Backup">
-          <Row
-            title="Export vault"
-            body="Download every section, link and mark as JSON."
-            action={
-              <Button variant="surface" size="sm" onClick={() => void download()} disabled={busy !== null}>
-                <Download size={15} /> Export
-              </Button>
-            }
-          />
+            <Row
+              title="Import vault"
+              body="Restore from a previously exported JSON backup."
+              action={
+                <Button
+                  variant="surface"
+                  size="sm"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={busy !== null}
+                >
+                  <Upload size={15} /> {busy === "import" ? "Importing…" : "Import"}
+                </Button>
+              }
+            />
+          </Group>
 
-          <Row
-            title="Import vault"
-            body="Restore from a previously exported JSON backup."
-            action={
-              <Button
-                variant="surface"
-                size="sm"
-                onClick={() => fileRef.current?.click()}
-                disabled={busy !== null}
-              >
-                <Upload size={15} /> {busy === "import" ? "Importing…" : "Import"}
-              </Button>
-            }
-          />
-
-        </Group>
-
-        <Group label="Session">
-          <Row
-            title="Lock the vault"
-            body="Ends this session in this browser."
-            action={
-              <Button size="sm" onClick={() => void lock()}>
-                <LockKeyhole size={15} /> Lock
-              </Button>
-            }
-          />
-        </Group>
+          <Group label="Session">
+            <Row
+              title="Lock the vault"
+              body="Ends this session in this browser."
+              action={
+                <Button size="sm" onClick={() => void lock()}>
+                  <LockKeyhole size={15} /> Lock
+                </Button>
+              }
+            />
+          </Group>
         </div>
 
         <input

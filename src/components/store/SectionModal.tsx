@@ -20,9 +20,17 @@ type SectionModalProps = {
   svgs: readonly SvgIcon[];
   onClose: () => void;
   onDone: (message: string) => void;
+  onOpenLibrary?: () => void;
 };
 
-export function SectionModal({ open, section, svgs, onClose, onDone }: SectionModalProps) {
+export function SectionModal({
+  open,
+  section,
+  svgs,
+  onClose,
+  onDone,
+  onOpenLibrary,
+}: SectionModalProps) {
   const [name, setName] = useState("");
   const [tone, setTone] = useState<SectionColor>("ember");
   const [svgUrl, setSvgUrl] = useState<string | null>(null);
@@ -119,7 +127,13 @@ export function SectionModal({ open, section, svgs, onClose, onDone }: SectionMo
 
         </div>
 
-        <SvgPicker label="Section mark" svgs={svgs} value={svgUrl} onChange={setSvgUrl} />
+        <SvgPicker
+          label="Section mark"
+          svgs={svgs}
+          value={svgUrl}
+          onChange={setSvgUrl}
+          onOpenLibrary={onOpenLibrary}
+        />
       </div>
     </Modal>
   );

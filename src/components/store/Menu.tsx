@@ -23,18 +23,25 @@ const WIDTH = 200;
 const GAP = 8;
 
 /**
- * The popover renders in a portal with fixed coordinates, so a card with
- * `overflow-hidden` or a tight grid cell can never clip it. It flips up or
- * left when it would leave the viewport.
+ * Responsive menu: Opens an iOS-style bottom action sheet on mobile phones,
+ * and a floating positioned popover on desktop.
  */
 export function Menu({ items, label = "More actions", size = "md" }: MenuProps) {
   const [open, setOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [position, setPosition] = useState<Position | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
   useLayoutEffect(() => {
-    if (!open) return setPosition(null);
+    if (!open || isMobile) return setPosition(null);
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
@@ -49,13 +56,12 @@ export function Menu({ items, label = "More actions", size = "md" }: MenuProps) 
       left,
       origin: flipUp ? "bottom right" : "top right",
     });
-  }, [open, items.length]);
+  }, [open, items.length, isMobile]);
 
   useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
     const onPointer = (event: MouseEvent) => {
-      // SAFETY: a mousedown target from a document listener is always a DOM Node.
       const target = event.target as Node;
       if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
       setOpen(false);
@@ -65,15 +71,15 @@ export function Menu({ items, label = "More actions", size = "md" }: MenuProps) 
     };
     document.addEventListener("mousedown", onPointer);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
+    if (!isMobile) {
+      window.addEventListener("scroll", close, true);
+    }
     return () => {
       document.removeEventListener("mousedown", onPointer);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
     };
-  }, [open]);
+  }, [open, isMobile]);
 
   return (
     <>
@@ -93,7 +99,65 @@ export function Menu({ items, label = "More actions", size = "md" }: MenuProps) 
         <MoreHorizontal size={16} />
       </IconButton>
 
-      {open && position
+      {open && isMobile
+        ? createPortal(
+            <div className="fixed inset-0 z-[120] flex items-end justify-center">
+              <button
+                tabIndex={-1}
+                type="button"
+                aria-label="Close menu"
+                className="animate-fade absolute inset-0 bg-canvas/70 backdrop-blur-sm"
+                onClick={() => setOpen(false)}
+              />
+              <div
+                ref={panelRef}
+                role="menu"
+                className="relative flex w-full flex-col overflow-hidden rounded-t-2xl bg-surface-2 p-3 pb-7 elev-3"
+                style={{
+                  animation: "store-rise 200ms var(--ease-out-strong) both",
+                  paddingBottom: "max(1.75rem, env(safe-area-inset-bottom))",
+                }}
+              >
+                <div className="mx-auto mb-3 mt-1 h-1 w-9 rounded-full bg-surface-3" />
+                {label ? (
+                  <p className="type-label mb-2.5 px-2 text-[11px] text-ink-faint">{label}</p>
+                ) : null}
+                <div className="flex flex-col gap-1">
+                  {items.map((item) => (
+                    <button
+                      key={item.label}
+                      role="menuitem"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpen(false);
+                        item.onSelect();
+                      }}
+                      className={cn(
+                        "press focus-ring flex h-11 w-full items-center gap-3 rounded-xl px-3.5 text-left text-sm font-medium transition-colors",
+                        item.destructive
+                          ? "bg-error/10 text-error active:bg-error/20"
+                          : "bg-surface-3/40 text-ink hover:bg-surface-3 active:bg-surface-3/80",
+                      )}
+                    >
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="press focus-ring mt-2.5 flex h-11 w-full items-center justify-center rounded-xl bg-surface-3 text-sm font-medium text-ink"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {open && !isMobile && position
         ? createPortal(
             <div
               ref={panelRef}

@@ -221,8 +221,8 @@ function PrimaryAction({
 }) {
   const [copied, setCopied] = useState(false);
   const shell = cn(
-    "press focus-ring inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium",
-    dense ? "h-8 px-3.5" : "h-9 min-w-[6.5rem] flex-1",
+    "press focus-ring inline-flex items-center justify-center gap-1.5 rounded-md font-medium",
+    dense ? "h-8 px-3.5 text-xs" : "h-9 min-w-[6rem] flex-1 px-4 text-sm",
   );
 
   if (asset.actionMode === "copy") {
@@ -261,7 +261,6 @@ export function AssetCard({
   index,
   menu,
   onToast,
-  onEdit,
   refreshing,
   compact,
   dragHandle,
@@ -280,16 +279,6 @@ export function AssetCard({
           className="focus-ring hidden h-8 w-8 cursor-grab items-center justify-center rounded-md text-ink-faint hover:text-ink active:cursor-grabbing md:inline-flex"
         >
           <GripVertical size={15} />
-        </button>
-      ) : null}
-      {onEdit ? (
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label={`Edit ${title}`}
-          className="press focus-ring inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-faint hover:bg-surface-3 hover:text-ink"
-        >
-          <Pencil size={14} />
         </button>
       ) : null}
       <Menu items={menu} size="sm" label={`${title} actions`} />
@@ -345,7 +334,7 @@ export function AssetCard({
 
       <div className="flex flex-1 flex-col gap-2.5 p-3.5">
         <div className="flex items-start gap-2.5">
-          <SvgMark url={asset.iconSvgUrl ?? null} fallback={domain} size={26} className="mt-0.5" />
+          <SvgMark url={asset.iconSvgUrl ?? null} fallback={domain} size={24} className="mt-0.5" />
           <div className="min-w-0 flex-1">
             <h3 className="type-title-sm truncate text-ink">{title}</h3>
             <p className="type-caption truncate">{domain}</p>

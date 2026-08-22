@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowUpRight, Copy, Plus, Trash2 } from "lucide-react";
+import { ArrowUpRight, Copy, Plus, Shapes, Trash2 } from "lucide-react";
 import { createAsset, updateAsset } from "@/lib/vault.functions";
 import { useVaultMutation } from "@/hooks/useVault";
 import {
@@ -17,6 +17,7 @@ import { Modal } from "./Modal";
 import { SvgMark } from "./SvgMark";
 import { SvgPicker } from "./SvgPicker";
 import { Button, IconButton, SegmentedControl, Switch, TextInput } from "./primitives";
+import { cn } from "@/lib/utils";
 
 const MODE_OPTIONS = [
   { value: "open" as ActionMode, label: "Open", icon: <ArrowUpRight size={14} /> },
@@ -54,9 +55,7 @@ function Field({
       {children}
     </section>
   );
-}
-
-export function AssetEditor({
+}export function AssetEditor({
   open,
   sectionId,
   asset,
@@ -71,6 +70,7 @@ export function AssetEditor({
   const [previewEnabled, setPreviewEnabled] = useState(true);
   const [actionMode, setActionMode] = useState<ActionMode>("open");
   const [rows, setRows] = useState<RowValues[]>([]);
+  const [activePickerRow, setActivePickerRow] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const create = useVaultMutation(useServerFn(createAsset));
@@ -92,6 +92,7 @@ export function AssetEditor({
         mode: row.mode,
       })) ?? [],
     );
+    setActivePickerRow(null);
     setError(null);
   }, [open, asset]);
 
@@ -101,9 +102,18 @@ export function AssetEditor({
   const submit = async () => {
     const cleanUrl = url.trim();
     if (!/^https?:\/\//i.test(cleanUrl)) return setError("Enter a full URL starting with https://");
-    const cleanRows = rows.filter((row) => row.url.trim().length > 0);
-    if (cleanRows.some((row) => !/^https?:\/\//i.test(row.url.trim()))) {
-      return setError("Every action row needs a full https:// URL.");
+
+    if (rows.length > 0) {
+      const emptyRowIndex = rows.findIndex((row) => !row.url.trim());
+      if (emptyRowIndex !== -1) {
+        return setError(
+          `Row ${emptyRowIndex + 1} is empty. Enter a URL (https://…) or remove the row.`,
+        );
+      }
+      const invalidRowIndex = rows.findIndex((row) => !/^https?:\/\//i.test(row.url.trim()));
+      if (invalidRowIndex !== -1) {
+        return setError(`Row ${invalidRowIndex + 1} needs a full URL starting with https://`);
+      }
     }
 
     const payload = {
@@ -113,7 +123,7 @@ export function AssetEditor({
       iconSvgUrl,
       previewEnabled,
       actionMode,
-      rows: cleanRows.map((row) => ({
+      rows: rows.map((row) => ({
         ...row,
         url: row.url.trim(),
         label: row.label?.trim() ? row.label.trim() : null,
@@ -139,11 +149,11 @@ export function AssetEditor({
       title={asset ? "Edit link" : "Add link"}
       subtitle="Paste a URL — everything else is optional."
       onClose={onClose}
-      width="lg"
+      width="2xl"
       footer={
         <div className="flex items-center justify-between gap-3">
           <p className={`type-caption truncate ${error ? "text-error" : ""}`}>
-            {error ?? `${rows.length}/${MAX_ROWS} action rows`}
+            {error ?? `${rows.length}/${MAX_ROWS} action rows configured`}
           </p>
           <div className="flex shrink-0 gap-2">
             <Button variant="surface" size="sm" onClick={onClose} disabled={pending}>
@@ -156,10 +166,11 @@ export function AssetEditor({
         </div>
       }
     >
-      <div className="grid gap-8 pb-2 lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-10">
-        <div className="flex min-w-0 flex-col gap-7">
+      <div className="grid grid-cols-1 gap-6 pb-2 md:grid-cols-[18.5rem_minmax(0,1fr)] lg:grid-cols-[18.5rem_minmax(0,1fr)_16.5rem] lg:gap-7">
+        {/* Column 1: Core Link Info & Appearance */}
+        <div className="flex min-w-0 flex-col gap-5">
           <Field label="Link">
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
               <TextInput
                 value={url}
                 autoFocus={!asset}
@@ -170,7 +181,7 @@ export function AssetEditor({
               />
               <TextInput
                 value={title}
-                placeholder="Title (optional — falls back to the page title)"
+                placeholder="Title (optional — falls back to page title)"
                 maxLength={120}
                 onChange={(event) => setTitle(event.target.value)}
               />
@@ -178,38 +189,79 @@ export function AssetEditor({
           </Field>
 
           <Field label="Behaviour">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <SegmentedControl
-                value={actionMode}
-                options={MODE_OPTIONS}
-                onChange={setActionMode}
-              />
-              <div className="flex h-11 min-w-0 items-center justify-between gap-3 rounded-md bg-surface-2 pl-3.5 pr-2.5">
-                <span className="type-title-sm min-w-0 truncate">Rich preview</span>
-                <Switch checked={previewEnabled} onChange={setPreviewEnabled} label="Rich preview" />
+            <div className="flex flex-col gap-2 rounded-xl bg-surface-2 p-3 hairline-soft">
+              <div className="flex flex-col gap-1.5">
+                <span className="type-label text-[10px] text-ink-faint">Default Action</span>
+                <SegmentedControl
+                  size="sm"
+                  value={actionMode}
+                  options={MODE_OPTIONS}
+                  onChange={setActionMode}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="min-w-0">
+                  <span className="type-title-sm block text-xs">Rich preview</span>
+                  <span className="type-caption text-[11px] text-ink-faint">Fetch metadata & cover</span>
+                </div>
+                <Switch
+                  checked={previewEnabled}
+                  onChange={setPreviewEnabled}
+                  label="Rich preview"
+                />
               </div>
             </div>
           </Field>
 
           <SvgPicker
-            label="Mark"
+            label="Card mark"
             svgs={svgs}
             value={iconSvgUrl}
             onChange={setIconSvgUrl}
             onOpenLibrary={onOpenLibrary}
+            compact
           />
+        </div>
 
-          <Field label="Action rows" hint="Small one-tap buttons on the card">
-            <div className="flex flex-col gap-3">
+        {/* Column 2: Dedicated Action Rows Workspace */}
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <div className="flex items-baseline justify-between gap-3">
+            <div>
+              <span className="type-label">Action rows</span>
+              <span className="type-caption ml-2 text-ink-faint">({rows.length}/{MAX_ROWS})</span>
+            </div>
+            <span className="type-caption text-ink-faint">
+              Small one-tap buttons on card
+            </span>
+          </div>
+
+          {rows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl bg-surface-2/60 px-5 py-12 text-center hairline-soft">
+              <p className="type-title-sm text-ink-muted">No action rows yet</p>
+              <p className="type-caption mt-1.5 max-w-xs text-ink-subtle">
+                Add up to 6 quick buttons with their own URLs, custom marks and Open or Copy actions.
+              </p>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setRows((current) => [...current, emptyRow()])}
+                className="mt-4"
+              >
+                <Plus size={14} /> Add first row
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
               {rows.map((row, index) => (
                 <div
                   key={index}
-                  className="animate-pop flex flex-col gap-2.5 rounded-lg bg-surface-2 p-3"
+                  className="animate-pop flex flex-col gap-2 rounded-xl bg-surface-2 p-3 hairline-soft"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="type-label">Row {index + 1}</span>
+                  {/* Row Top Bar: Label, Full Mode SegmentedControl, Delete button */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="type-label text-ink-muted">Row {index + 1}</span>
                     <div className="flex items-center gap-2">
-                      <div className="w-[9.5rem]">
+                      <div className="w-[8.75rem]">
                         <SegmentedControl
                           size="sm"
                           value={row.mode}
@@ -218,59 +270,95 @@ export function AssetEditor({
                         />
                       </div>
                       <IconButton
-                        label="Remove row"
+                        label={`Delete row ${index + 1}`}
                         size="sm"
-                        onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-                        className="hover:text-error"
+                        onClick={() => {
+                          if (activePickerRow === index) setActivePickerRow(null);
+                          setRows((current) => current.filter((_, i) => i !== index));
+                        }}
+                        className="h-8 w-8 text-ink-subtle hover:text-error"
                       >
-                        <Trash2 size={15} />
+                        <Trash2 size={14} />
                       </IconButton>
                     </div>
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+                  {/* Row Inputs: Mark Trigger, URL, Label */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      title={row.svgUrl ? "Change row mark" : "Add row mark"}
+                      onClick={() =>
+                        setActivePickerRow(activePickerRow === index ? null : index)
+                      }
+                      className={cn(
+                        "press focus-ring inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors",
+                        row.svgUrl
+                          ? "bg-surface-3 hover:bg-surface-3/80"
+                          : "border border-dashed border-hairline bg-surface-3/40 text-ink-faint hover:border-hairline-strong hover:text-ink",
+                        activePickerRow === index && "ring-1 ring-accent",
+                      )}
+                    >
+                      {row.svgUrl ? (
+                        <SvgMark url={row.svgUrl} fallback={row.label || `R${index + 1}`} size={18} />
+                      ) : (
+                        <Shapes size={14} />
+                      )}
+                    </button>
+
                     <TextInput
                       value={row.url}
                       inputMode="url"
                       placeholder="https://…"
-                      className="h-9 bg-surface-3 text-sm"
+                      className="h-9 min-w-0 flex-[1.6] bg-surface-3 text-sm"
                       onChange={(event) => patchRow(index, { url: event.target.value })}
                     />
+
                     <TextInput
                       value={row.label ?? ""}
                       placeholder="Label"
-                      maxLength={40}
-                      className="h-9 bg-surface-3 text-sm"
+                      maxLength={30}
+                      className="h-9 min-w-0 flex-1 bg-surface-3 text-sm"
                       onChange={(event) => patchRow(index, { label: event.target.value })}
                     />
                   </div>
 
-                  <SvgPicker
-                    compact
-                    label=""
-                    svgs={svgs}
-                    value={row.svgUrl}
-                    onChange={(next) => patchRow(index, { svgUrl: next })}
-                  />
+                  {/* Row Mark Picker (Inline) */}
+                  {activePickerRow === index ? (
+                    <div className="animate-fade mt-1 rounded-lg bg-surface-3/90 p-2.5">
+                      <SvgPicker
+                        compact
+                        label={`Row ${index + 1} mark`}
+                        svgs={svgs}
+                        value={row.svgUrl}
+                        onChange={(next) => {
+                          patchRow(index, { svgUrl: next });
+                          setActivePickerRow(null);
+                        }}
+                        onOpenLibrary={onOpenLibrary}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ))}
 
-              <Button
-                variant="surface"
-                size="sm"
-                disabled={rows.length >= MAX_ROWS}
-                onClick={() => setRows((current) => [...current, emptyRow()])}
-                className="self-start"
-              >
-                <Plus size={14} /> Add row
-              </Button>
+              {rows.length < MAX_ROWS ? (
+                <Button
+                  variant="surface"
+                  size="sm"
+                  onClick={() => setRows((current) => [...current, emptyRow()])}
+                  className="mt-1 self-start"
+                >
+                  <Plus size={14} /> Add row ({rows.length}/{MAX_ROWS})
+                </Button>
+              ) : null}
             </div>
-          </Field>
+          )}
         </div>
 
-        {/* Live card preview — desktop only, the phone sheet keeps one column. */}
-        <aside className="hidden lg:flex lg:flex-col lg:gap-3">
-          <span className="type-label">Preview</span>
+        {/* Column 3: Live Card Preview (Top on mobile, right column on desktop) */}
+        <div className="order-first flex min-w-0 flex-col gap-3 lg:order-none">
+          <span className="type-label">Live Card Preview</span>
           <div className="overflow-hidden rounded-xl bg-surface-2 elev-1">
             {previewEnabled ? (
               <div
@@ -324,10 +412,10 @@ export function AssetEditor({
               </div>
             </div>
           </div>
-          <p className="type-caption">
+          <p className="type-caption text-[11px] text-ink-faint">
             Real title, description and artwork are fetched right after you save.
           </p>
-        </aside>
+        </div>
       </div>
     </Modal>
   );

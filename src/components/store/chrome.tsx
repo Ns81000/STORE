@@ -25,30 +25,9 @@ type TopBarProps = {
   below?: ReactNode;
 };
 
-/** True once the page has scrolled past the header's resting position. */
-function useScrolled(threshold = 12): boolean {
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > threshold);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [threshold]);
-  return scrolled;
-}
-
 export function TopBar({ eyebrow, title, back, actions, below }: TopBarProps) {
-  const scrolled = useScrolled();
-
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-30 -mx-5 mb-9 px-5 pb-5 pt-8 transition-[background-color,backdrop-filter] duration-300 sm:pt-12",
-        // Transparent at rest so the ambient field runs unbroken behind it;
-        // only a soft veil once content slides underneath.
-        scrolled ? "bg-canvas/55 backdrop-blur-xl" : "bg-transparent",
-      )}
-    >
+    <header className="mb-9 pt-8 sm:pt-12">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
         <div className="min-w-0">
           {back ? (

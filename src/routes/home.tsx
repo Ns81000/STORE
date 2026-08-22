@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { LockKeyhole, Plus, Settings, Shapes } from "lucide-react";
 import { useVault, useVaultMutation, useToast } from "@/hooks/useVault";
+import { getSessionState } from "@/lib/auth.functions";
 import { deleteSection, reorderSections } from "@/lib/vault.functions";
 import { MAX_SECTIONS, type Section } from "@/lib/store.types";
 import { SectionTile } from "@/components/store/cards";
@@ -26,6 +27,10 @@ export const Route = createFileRoute("/home")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
+  beforeLoad: async () => {
+    const state = await getSessionState();
+    if (!state.unlocked) throw redirect({ to: "/" });
+  },
   component: HomeRoute,
 });
 
@@ -117,7 +122,12 @@ function HomeRoute() {
             <IconButton label="Lock vault" onClick={() => void lock()}>
               <LockKeyhole size={18} />
             </IconButton>
-            <Button size="sm" onClick={openNew} disabled={atLimit} className="hidden md:inline-flex">
+            <Button
+              size="sm"
+              onClick={openNew}
+              disabled={atLimit}
+              className="hidden md:inline-flex"
+            >
               <Plus size={16} /> Section
             </Button>
           </>
@@ -158,6 +168,10 @@ function HomeRoute() {
         svgs={vault.svgs}
         onClose={() => setModalOpen(false)}
         onDone={setToast}
+        onOpenLibrary={() => {
+          setModalOpen(false);
+          setLibraryOpen(true);
+        }}
       />
       <SvgLibrary
         open={libraryOpen}

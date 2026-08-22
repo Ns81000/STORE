@@ -163,18 +163,17 @@ export function Switch({ checked, onChange, label }: SwitchProps) {
       aria-label={label}
       onClick={() => onChange(!checked)}
       className={cn(
-        "focus-ring relative h-7 w-12 shrink-0 rounded-pill transition-colors duration-250",
-        checked ? "bg-accent" : "bg-surface-3",
+        "focus-ring relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-pill p-0.5 transition-colors duration-200",
+        checked ? "bg-accent" : "bg-surface-3 hover:bg-surface-3/80",
       )}
       style={{ transitionTimingFunction: "var(--ease-out-strong)" }}
     >
       <span
         className={cn(
-          "absolute top-1 h-5 w-5 rounded-pill transition-transform duration-250",
-          checked ? "bg-on-accent" : "bg-ink-muted",
+          "pointer-events-none block h-5 w-5 rounded-pill bg-ink shadow-sm transition-transform duration-200",
+          checked ? "translate-x-5" : "translate-x-0",
         )}
         style={{
-          transform: checked ? "translateX(24px)" : "translateX(4px)",
           transitionTimingFunction: "var(--ease-spring)",
         }}
       />

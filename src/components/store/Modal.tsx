@@ -10,16 +10,32 @@ type ModalProps = {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
-  width?: "sm" | "md" | "lg";
+  width?: "sm" | "md" | "lg" | "xl" | "2xl";
+  zIndex?: string;
 };
 
-const WIDTH = { sm: "sm:max-w-md", md: "sm:max-w-xl", lg: "sm:max-w-3xl" } as const;
+const WIDTH = {
+  sm: "sm:max-w-md",
+  md: "sm:max-w-xl",
+  lg: "sm:max-w-3xl",
+  xl: "sm:max-w-5xl",
+  "2xl": "sm:max-w-[78rem]",
+} as const;
 
 /**
  * Centred command-style modal on tablet+, full-height sheet on phones.
  * Borderless: separation comes from surface steps and elevation.
  */
-export function Modal({ open, title, subtitle, onClose, children, footer, width = "md" }: ModalProps) {
+export function Modal({
+  open,
+  title,
+  subtitle,
+  onClose,
+  children,
+  footer,
+  width = "md",
+  zIndex = "z-[70]",
+}: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -36,7 +52,7 @@ export function Modal({ open, title, subtitle, onClose, children, footer, width 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-6">
+    <div className={cn("fixed inset-0 flex items-end justify-center sm:items-center sm:p-6", zIndex)}>
       <button
         tabIndex={-1}
         aria-label="Close"

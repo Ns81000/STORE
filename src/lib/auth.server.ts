@@ -1,18 +1,16 @@
+import bcrypt from "bcryptjs";
 import { getRequestHeader } from "@tanstack/react-start/server";
-import {
-  closeSession,
-  currentSession,
-  openSession,
-  passwordMatches,
-  sessionExpiryFrom,
-} from "./session.server";
+import { closeSession, currentSession, openSession, sessionExpiryFrom } from "./session.server";
 import { clearAttempts, lockoutRemainingMs, recordFailedAttempt } from "./store.server";
 
 export type UnlockResult = { ok: boolean; lockedForMs: number };
 export type SessionState = { unlocked: boolean; expiresAt: number | null };
 
+// Vercel sets x-real-ip; Cloudflare sets cf-connecting-ip; both strip
+// client-supplied values, unlike a bare x-forwarded-for behind plain proxies.
 function requesterIp(): string {
   return (
+    getRequestHeader("x-real-ip") ??
     getRequestHeader("cf-connecting-ip") ??
     getRequestHeader("x-forwarded-for")?.split(",")[0]?.trim() ??
     "unknown"
@@ -25,8 +23,9 @@ export async function attemptUnlock(password: string): Promise<UnlockResult> {
   const lockedForMs = await lockoutRemainingMs(ip);
   if (lockedForMs > 0) return { ok: false, lockedForMs };
 
-  const expected = process.env["STORE_PASSWORD"];
-  if (!expected || !passwordMatches(password, expected)) {
+  const expectedHash = process.env["AUTH_PASSWORD_HASH"];
+  // bcrypt.compare is constant-time over the hash; no plaintext is ever stored.
+  if (!expectedHash || !(await bcrypt.compare(password, expectedHash))) {
     await recordFailedAttempt(ip);
     return { ok: false, lockedForMs: 0 };
   }

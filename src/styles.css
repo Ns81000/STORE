@@ -207,13 +207,13 @@
   }
 
   .elev-1 {
-    box-shadow: var(--elev-1), var(--hair-soft);
+    box-shadow: var(--elev-1);
   }
   .elev-2 {
-    box-shadow: var(--elev-2), var(--hair-soft);
+    box-shadow: var(--elev-2);
   }
   .elev-3 {
-    box-shadow: var(--elev-3), var(--hair-soft);
+    box-shadow: var(--elev-3);
   }
 }
 

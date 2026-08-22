@@ -1,14 +1,10 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { LayoutGrid, LockKeyhole, Plus, RefreshCw, Rows3 } from "lucide-react";
 import { useStoredChoice, useToast, useVault, useVaultMutation } from "@/hooks/useVault";
-import {
-  deleteAsset,
-  refreshPreview,
-  refreshPreviews,
-  reorderAssets,
-} from "@/lib/vault.functions";
+import { getSessionState } from "@/lib/auth.functions";
+import { deleteAsset, refreshPreview, refreshPreviews, reorderAssets } from "@/lib/vault.functions";
 import { assetLabel, type Asset } from "@/lib/store.types";
 import { AssetCard } from "@/components/store/cards";
 import { SearchField } from "@/components/store/SearchField";
@@ -35,6 +31,10 @@ export const Route = createFileRoute("/s/$slug")({
         { name: "robots", content: "noindex, nofollow" },
       ],
     };
+  },
+  beforeLoad: async () => {
+    const state = await getSessionState();
+    if (!state.unlocked) throw redirect({ to: "/" });
   },
   component: SectionRoute,
 });
@@ -206,8 +206,8 @@ function SectionRoute() {
       />
 
       {isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((index) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((index) => (
             <Skeleton key={index} className="h-64" />
           ))}
         </div>
@@ -226,7 +226,7 @@ function SectionRoute() {
           className={
             view === "compact"
               ? "flex flex-col gap-2"
-              : "grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              : "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           }
         >
           {visible.length === 0 ? (
@@ -242,10 +242,6 @@ function SectionRoute() {
               compact={view === "compact"}
               menu={menuFor(asset, index)}
               onToast={setToast}
-              onEdit={() => {
-                setEditing(asset);
-                setEditorOpen(true);
-              }}
               refreshing={refreshingId === asset.id}
             />
           ))}

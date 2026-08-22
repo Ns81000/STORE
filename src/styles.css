@@ -1,0 +1,356 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+/*
+ * STORE — design system, Raycast-true.
+ * Pure near-black canvas, a surface ladder (#07080a → #0d0d0d → #101111 → #121212),
+ * hairline separation instead of heavy shadows, tight radii, Inter with ss03.
+ * Every value in the app must trace back to a token defined here.
+ */
+
+@theme inline {
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-on-accent: var(--on-accent);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-warm: var(--warm);
+  --color-hairline: var(--hairline);
+  --color-tone-ember: var(--tone-ember);
+  --color-tone-moss: var(--tone-moss);
+  --color-tone-steel: var(--tone-steel);
+  --color-tone-sand: var(--tone-sand);
+  --color-tone-rose: var(--tone-rose);
+  --color-error: var(--error);
+  --color-success: var(--success);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--on-accent);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--ink-muted);
+  --color-border: var(--hairline);
+  --color-ring: var(--accent);
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  --font-display: var(--font-sans-stack);
+  --font-sans: var(--font-sans-stack);
+  --font-mono: var(--font-mono-stack);
+
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+:root {
+  --font-sans-stack:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono-stack:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /* Raycast surface ladder */
+  --canvas: #07080a;
+  --surface: #0d0d0d;
+  --surface-2: #101111;
+  --surface-3: #17181a;
+
+  --ink: #f4f4f6;
+  --ink-muted: #cdcdcd;
+  --ink-subtle: #9c9c9d;
+  --ink-faint: #6a6b6c;
+
+  --hairline: #242728;
+  --hairline-soft: rgb(255 255 255 / 0.08);
+  --hairline-strong: rgb(255 255 255 / 0.16);
+
+  --accent: #ff6161;
+  --accent-soft: rgb(255 97 97 / 0.15);
+  --on-accent: #18191a;
+  --warm: #ffc533;
+
+  /* Section identity hues — used as *light*, never as paint. */
+  --tone-ember: #ff6161;
+  --tone-moss: #59d499;
+  --tone-steel: #57c1ff;
+  --tone-sand: #ffc533;
+  --tone-rose: #d78bff;
+
+  --error: #ff6161;
+  --success: #59d499;
+
+  --elev-1: 0 1px 2px rgb(0 0 0 / 0.5);
+  --elev-2: 0 4px 16px -6px rgb(0 0 0 / 0.7);
+  --elev-3: 0 12px 40px -12px rgb(0 0 0 / 0.8);
+  --glow-accent: 0 0 0 3px var(--accent-soft);
+  --hair: inset 0 0 0 1px var(--hairline);
+  --hair-soft: inset 0 0 0 1px var(--hairline-soft);
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    color-scheme: dark;
+    scrollbar-color: var(--surface-3) transparent;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans-stack);
+    font-feature-settings: "calt", "kern", "liga", "ss03";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+}
+
+@layer components {
+  .type-display-xl {
+    font-weight: 600;
+    font-size: clamp(2.25rem, 6vw, 4rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  .type-display-lg {
+    font-weight: 600;
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    line-height: 1.15;
+    letter-spacing: -0.018em;
+  }
+
+  .type-display-md {
+    font-weight: 600;
+    font-size: 1.375rem;
+    line-height: 1.25;
+    letter-spacing: -0.014em;
+  }
+
+  .type-display-sm {
+    font-weight: 600;
+    font-size: 1.125rem;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+  }
+
+  .type-title-sm {
+    font-weight: 500;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+    letter-spacing: 0.0125em;
+  }
+
+  .type-body {
+    font-weight: 400;
+    font-size: 0.9375rem;
+    line-height: 1.6;
+  }
+
+  .type-caption {
+    font-weight: 400;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    letter-spacing: 0.006em;
+    color: var(--ink-subtle);
+  }
+
+  .type-label {
+    font-weight: 500;
+    font-size: 0.6875rem;
+    line-height: 1.5;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .row-divide > * + * {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .hairline {
+    box-shadow: var(--hair);
+  }
+  .hairline-soft {
+    box-shadow: var(--hair-soft);
+  }
+
+  .press {
+    transition:
+      transform 140ms var(--ease-out-strong),
+      background-color 160ms var(--ease-out-strong),
+      box-shadow 200ms var(--ease-out-strong),
+      color 160ms var(--ease-out-strong);
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+
+  .focus-ring:focus-visible {
+    outline: none;
+    box-shadow: var(--glow-accent);
+  }
+
+  .elev-1 {
+    box-shadow: var(--elev-1), var(--hair-soft);
+  }
+  .elev-2 {
+    box-shadow: var(--elev-2), var(--hair-soft);
+  }
+  .elev-3 {
+    box-shadow: var(--elev-3), var(--hair-soft);
+  }
+}
+
+/* Ambient page field: one fixed layer, pure CSS, identical on every page. */
+@utility page-field {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      120vw 70vh at 50% -18%,
+      color-mix(in srgb, var(--tone) 9%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(70vw 50vh at 100% 0%, rgb(255 255 255 / 0.025), transparent 60%),
+    linear-gradient(180deg, var(--surface) 0%, var(--canvas) 46%, var(--canvas) 100%);
+}
+
+@utility page-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -9;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.022) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.022) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 68%);
+}
+
+/* Generated cover for links with no usable OG image. */
+@utility generated-cover {
+  background:
+    radial-gradient(80% 90% at 22% 12%, color-mix(in srgb, var(--tone) 30%, transparent), transparent 70%),
+    radial-gradient(70% 80% at 88% 92%, color-mix(in srgb, var(--tone) 16%, transparent), transparent 72%),
+    linear-gradient(160deg, #141516, #0b0c0d);
+}
+
+@utility stagger-in {
+  animation: store-rise 420ms var(--ease-out-strong) both;
+}
+
+.gradient-waves-container {
+  overflow: hidden;
+}
+
+@keyframes store-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes store-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes store-pop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes store-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes store-shimmer {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 0.75;
+  }
+}
+
+@keyframes store-curtain {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.animate-shake {
+  animation: store-shake 340ms var(--ease-out-strong);
+}
+.animate-pop {
+  animation: store-pop 220ms var(--ease-out-strong) both;
+}
+.animate-fade {
+  animation: store-fade 260ms var(--ease-out-strong) both;
+}
+
+.skeleton {
+  animation: store-shimmer 1000ms ease-in-out infinite alternate;
+  background: var(--surface-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

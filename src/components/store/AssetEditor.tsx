@@ -140,8 +140,20 @@ function Field({
     }
   };
 
-  const domain = url.trim() ? domainOf(url.trim()) : "example.com";
-  const displayTitle = title.trim() || asset?.preview?.ogTitle || domain;
+  const cleanUrl = url.trim();
+  const hasValidUrl = /^https?:\/\//i.test(cleanUrl);
+  const domain = hasValidUrl ? domainOf(cleanUrl) : "example.com";
+  const displayTitle =
+    title.trim() ||
+    (asset && asset.url === cleanUrl ? asset.preview?.ogTitle : null) ||
+    domain;
+
+  const previewImageUrl =
+    previewEnabled && hasValidUrl
+      ? (asset && asset.url === cleanUrl && asset.preview?.ogImageUrl
+          ? asset.preview.ogImageUrl
+          : `https://s0.wp.com/mshots/v1/${encodeURIComponent(cleanUrl)}?w=600`)
+      : null;
 
   return (
     <Modal
@@ -361,20 +373,33 @@ function Field({
           <span className="type-label">Live Card Preview</span>
           <div className="overflow-hidden rounded-xl bg-surface-2 elev-1">
             {previewEnabled ? (
-              <div
-                className="generated-cover flex aspect-[16/9] flex-col items-center justify-center gap-2"
-                style={{ ["--tone" as string]: toneForKey(domain) }}
-              >
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-canvas/40 hairline-soft">
-                  {iconSvgUrl ? (
-                    <SvgMark url={iconSvgUrl} fallback={domain} size={24} />
-                  ) : (
-                    <span className="text-sm font-semibold" style={{ color: "var(--tone)" }}>
-                      {initialsOf(domain)}
+              <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface">
+                {previewImageUrl ? (
+                  <img
+                    key={previewImageUrl}
+                    src={previewImageUrl}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover transition-transform duration-300"
+                  />
+                ) : (
+                  <div
+                    className="generated-cover flex h-full w-full flex-col items-center justify-center gap-2"
+                    style={{ ["--tone" as string]: toneForKey(domain) }}
+                  >
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-canvas/40 hairline-soft">
+                      {iconSvgUrl ? (
+                        <SvgMark url={iconSvgUrl} fallback={domain} size={24} />
+                      ) : (
+                        <span className="text-sm font-semibold" style={{ color: "var(--tone)" }}>
+                          {initialsOf(domain)}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-                <span className="type-caption">{domain}</span>
+                    <span className="type-caption">{domain}</span>
+                  </div>
+                )}
               </div>
             ) : null}
             <div className="flex flex-col gap-3 p-3.5">
@@ -413,7 +438,9 @@ function Field({
             </div>
           </div>
           <p className="type-caption text-[11px] text-ink-faint">
-            Real title, description and artwork are fetched right after you save.
+            {previewEnabled
+              ? "Live visual preview will be displayed on your card."
+              : "Rich preview is disabled. Card will use a clean compact cover."}
           </p>
         </div>
       </div>

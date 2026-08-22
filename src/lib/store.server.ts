@@ -6,6 +6,7 @@ import {
   MAX_SVGS,
   SECTION_COLORS,
   coerceColor,
+  domainOf,
   type ActionMode,
   type Asset,
   type AssetRow,
@@ -311,52 +312,118 @@ function rowStatements(assetId: string, rows: readonly RowInput[], now: number):
 export async function insertAsset(input: AssetInput): Promise<string> {
   const id = newId();
   const now = Date.now();
-  await db().batch(
-    [
-      {
-        sql: `INSERT INTO assets (id, section_id, url, title, icon_svg_url, preview_enabled, action_mode, sort_order, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM assets WHERE section_id = ?), 0), ?, ?)`,
-        args: [
-          id,
-          input.sectionId,
-          input.url,
-          input.title,
-          input.iconSvgUrl,
-          input.previewEnabled ? 1 : 0,
-          input.actionMode,
-          input.sectionId,
-          now,
-          now,
-        ],
-      },
-      ...rowStatements(id, input.rows, now),
-    ],
-    "write",
-  );
+
+  const screenshotUrl = isSafePublicUrl(input.url)
+    ? `https://s0.wp.com/mshots/v1/${encodeURIComponent(input.url)}?w=960`
+    : null;
+
+  const statements: InStatement[] = [
+    {
+      sql: `INSERT INTO assets (id, section_id, url, title, icon_svg_url, preview_enabled, action_mode, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM assets WHERE section_id = ?), 0), ?, ?)`,
+      args: [
+        id,
+        input.sectionId,
+        input.url,
+        input.title,
+        input.iconSvgUrl,
+        input.previewEnabled ? 1 : 0,
+        input.actionMode,
+        input.sectionId,
+        now,
+        now,
+      ],
+    },
+    ...rowStatements(id, input.rows, now),
+  ];
+
+  if (input.previewEnabled && screenshotUrl) {
+    statements.push({
+      sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(asset_id) DO UPDATE SET
+              og_title = excluded.og_title,
+              og_description = excluded.og_description,
+              og_image_url = excluded.og_image_url,
+              og_site_name = excluded.og_site_name,
+              status = excluded.status,
+              fetched_at = excluded.fetched_at,
+              error_message = excluded.error_message`,
+      args: [
+        id,
+        input.title || prettyDomainTitle(input.url),
+        null,
+        screenshotUrl,
+        domainOf(input.url),
+        "ok",
+        now,
+        null,
+      ],
+    });
+  }
+
+  await db().batch(statements, "write");
   return id;
 }
 
 export async function updateAsset(id: string, input: AssetInput): Promise<void> {
   const now = Date.now();
-  await db().batch(
-    [
-      {
-        sql: "UPDATE assets SET url = ?, title = ?, icon_svg_url = ?, preview_enabled = ?, action_mode = ?, updated_at = ? WHERE id = ?",
-        args: [
-          input.url,
-          input.title,
-          input.iconSvgUrl,
-          input.previewEnabled ? 1 : 0,
-          input.actionMode,
-          now,
-          id,
-        ],
-      },
-      { sql: "DELETE FROM asset_rows WHERE asset_id = ?", args: [id] },
-      ...rowStatements(id, input.rows, now),
-    ],
-    "write",
-  );
+  const screenshotUrl = isSafePublicUrl(input.url)
+    ? `https://s0.wp.com/mshots/v1/${encodeURIComponent(input.url)}?w=960`
+    : null;
+
+  const statements: InStatement[] = [
+    {
+      sql: "UPDATE assets SET url = ?, title = ?, icon_svg_url = ?, preview_enabled = ?, action_mode = ?, updated_at = ? WHERE id = ?",
+      args: [
+        input.url,
+        input.title,
+        input.iconSvgUrl,
+        input.previewEnabled ? 1 : 0,
+        input.actionMode,
+        now,
+        id,
+      ],
+    },
+    { sql: "DELETE FROM asset_rows WHERE asset_id = ?", args: [id] },
+    ...rowStatements(id, input.rows, now),
+  ];
+
+  if (input.previewEnabled && screenshotUrl) {
+    statements.push({
+      sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(asset_id) DO UPDATE SET
+              og_title = COALESCE(preview_cache.og_title, excluded.og_title),
+              og_description = preview_cache.og_description,
+              og_image_url = CASE 
+                WHEN preview_cache.og_image_url IS NULL OR preview_cache.og_image_url LIKE '%mshots%' 
+                THEN excluded.og_image_url 
+                ELSE preview_cache.og_image_url 
+              END,
+              og_site_name = COALESCE(preview_cache.og_site_name, excluded.og_site_name),
+              status = excluded.status,
+              fetched_at = excluded.fetched_at,
+              error_message = excluded.error_message`,
+      args: [
+        id,
+        input.title || prettyDomainTitle(input.url),
+        null,
+        screenshotUrl,
+        domainOf(input.url),
+        "ok",
+        now,
+        null,
+      ],
+    });
+  } else if (!input.previewEnabled) {
+    statements.push({
+      sql: "DELETE FROM preview_cache WHERE asset_id = ?",
+      args: [id],
+    });
+  }
+
+  await db().batch(statements, "write");
 }
 
 export async function applyOrder(
@@ -605,19 +672,19 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
     };
   }
 
+  const screenshotFallback = `https://s0.wp.com/mshots/v1/${encodeURIComponent(url)}?w=960`;
   const fetched = await fetchHtml(url);
   const domainTitle = prettyDomainTitle(url);
 
   if (!fetched) {
-    // Even unreachable/JS-only hosts get a usable card from the domain + icon service.
+    // Unreachable / SPA client-rendered host: return domain title and live screenshot preview
     return {
       ogTitle: domainTitle,
       ogDescription: null,
-      // No favicon stand-in: the card renders a generated branded cover instead.
-      ogImageUrl: null,
+      ogImageUrl: screenshotFallback,
       ogSiteName: null,
       status: "ok",
-      errorMessage: "Metadata unavailable — showing domain details",
+      errorMessage: null,
     };
   }
 
@@ -636,7 +703,7 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
     metaContent(html, ["og:description", "twitter:description", "description"]) ??
     jsonLdValue(html, ["description"]);
 
-  const image =
+  const ogImage =
     absolute(
       metaContent(html, [
         "og:image",
@@ -650,10 +717,12 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
     absolute(jsonLdValue(html, ["image", "thumbnailUrl"]), finalUrl) ??
     absolute(metaContent(html, ["msapplication-TileImage"]), finalUrl);
 
+  const liveScreenshot = `https://s0.wp.com/mshots/v1/${encodeURIComponent(finalUrl || url)}?w=960`;
+
   return {
     ogTitle: title.length > 0 ? title.slice(0, 200) : domainTitle,
     ogDescription: description ? description.slice(0, 400) : null,
-    ogImageUrl: image,
+    ogImageUrl: ogImage || liveScreenshot,
     ogSiteName: metaContent(html, ["og:site_name", "application-name"]),
     status: "ok",
     errorMessage: null,
@@ -703,16 +772,60 @@ export async function refreshPreviewFor(assetId: string, knownUrl?: string): Pro
 export async function refreshAllPreviews(sectionId?: string): Promise<number> {
   const result = sectionId
     ? await db().execute({
-        sql: "SELECT id FROM assets WHERE preview_enabled = 1 AND section_id = ?",
+        sql: "SELECT id, url FROM assets WHERE preview_enabled = 1 AND section_id = ?",
         args: [sectionId],
       })
-    : await db().execute("SELECT id FROM assets WHERE preview_enabled = 1");
-  const ids = result.rows.map((row) => requiredText(row["id"], "id"));
-  const BATCH = 4;
-  for (let i = 0; i < ids.length; i += BATCH) {
-    await Promise.all(ids.slice(i, i + BATCH).map((id) => refreshPreviewFor(id)));
+    : await db().execute("SELECT id, url FROM assets WHERE preview_enabled = 1");
+
+  const items = result.rows.map((row) => ({
+    id: requiredText(row["id"], "id"),
+    url: requiredText(row["url"], "url"),
+  }));
+
+  if (items.length === 0) return 0;
+
+  // Scrape previews in parallel chunks of 4
+  const BATCH_SIZE = 4;
+  const scrapedResults: { id: string; preview: ScrapeResult }[] = [];
+
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const chunk = items.slice(i, i + BATCH_SIZE);
+    const chunkResults = await Promise.all(
+      chunk.map(async (item) => ({
+        id: item.id,
+        preview: await scrapePreview(item.url),
+      })),
+    );
+    scrapedResults.push(...chunkResults);
   }
-  return ids.length;
+
+  const now = Date.now();
+  const statements: InStatement[] = scrapedResults.map(({ id, preview }) => ({
+    sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(asset_id) DO UPDATE SET
+            og_title = excluded.og_title,
+            og_description = excluded.og_description,
+            og_image_url = excluded.og_image_url,
+            og_site_name = excluded.og_site_name,
+            status = excluded.status,
+            fetched_at = excluded.fetched_at,
+            error_message = excluded.error_message`,
+    args: [
+      id,
+      preview.ogTitle,
+      preview.ogDescription,
+      preview.ogImageUrl,
+      preview.ogSiteName,
+      preview.status,
+      now,
+      preview.errorMessage,
+    ],
+  }));
+
+  // Write all preview updates in 1 single atomic transaction
+  await db().batch(statements, "write");
+  return items.length;
 }
 
 /* ---------- section mutations ---------- */

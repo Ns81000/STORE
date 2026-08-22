@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, Check, Copy, GripVertical, Pencil, RefreshCw } from "lucide-react";
 import {
@@ -165,11 +165,33 @@ type CoverProps = { asset: Asset; title: string; domain: string };
 /** Real OG art when we have it, otherwise a branded generated cover. */
 export function AssetCover({ asset, title, domain }: CoverProps) {
   const [broken, setBroken] = useState(false);
-  const image = asset.previewEnabled && !broken ? asset.preview?.ogImageUrl : null;
+  const [cacheBust, setCacheBust] = useState<number | null>(null);
+  const rawImageUrl = asset.preview?.ogImageUrl;
+
+  useEffect(() => {
+    setBroken(false);
+    setCacheBust(null);
+
+    if (!rawImageUrl || !rawImageUrl.includes("mshots")) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setCacheBust(Date.now());
+    }, 3200);
+    return () => window.clearTimeout(timer);
+  }, [rawImageUrl]);
+
+  const imageUrl = rawImageUrl
+    ? cacheBust
+      ? `${rawImageUrl}${rawImageUrl.includes("?") ? "&" : "?"}_v=${cacheBust}`
+      : rawImageUrl
+    : null;
+
+  const image = asset.previewEnabled && !broken ? imageUrl : null;
 
   if (image) {
     return (
       <img
+        key={imageUrl ?? "img"}
         src={image}
         alt=""
         loading="lazy"

@@ -30,10 +30,9 @@ import {
   updateAsset as updateAssetRow,
   updateSection as updateSectionRow,
   updateSvg as updateSvgRow,
+  wipeVaultData,
 } from "./store.server";
 
-// POST, not GET: a GET server function can be served from the browser's HTTP
-// cache, which made freshly saved rows appear only after a hard refresh.
 export const listVault = createServerFn({ method: "POST" }).handler(async () => {
   await requireUnlocked();
   return loadVault();
@@ -50,7 +49,8 @@ export const updateSection = createServerFn({ method: "POST" })
   .inputValidator(updateSectionInput.parse)
   .handler(async ({ data }) => {
     await requireUnlocked();
-    return updateSectionRow(data.id, data.name, data.colorToken, data.svgUrl);
+    await updateSectionRow(data.id, data.name, data.colorToken, data.svgUrl);
+    return { ok: true as const };
   });
 
 export const recolorSection = createServerFn({ method: "POST" })
@@ -82,7 +82,9 @@ export const createAsset = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireUnlocked();
     const id = await insertAsset(data);
-    if (data.previewEnabled) await refreshPreviewFor(id, data.url);
+    if (data.previewEnabled) {
+      void refreshPreviewFor(id, data.url);
+    }
     return { id };
   });
 
@@ -91,7 +93,9 @@ export const updateAsset = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     await requireUnlocked();
     await updateAssetRow(data.id, data);
-    if (data.previewEnabled) await refreshPreviewFor(data.id, data.url);
+    if (data.previewEnabled) {
+      void refreshPreviewFor(data.id, data.url);
+    }
     return { ok: true as const };
   });
 
@@ -162,3 +166,8 @@ export const importVault = createServerFn({ method: "POST" })
     await requireUnlocked();
     return importVaultData(data.payload);
   });
+
+export const wipeVault = createServerFn({ method: "POST" }).handler(async () => {
+  await requireUnlocked();
+  return wipeVaultData();
+});

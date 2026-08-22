@@ -1,11 +1,13 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
-import { Download, LockKeyhole, RefreshCw, Upload } from "lucide-react";
+import { Download, LockKeyhole, RefreshCw, Trash2, Upload } from "lucide-react";
 import { getSessionState } from "@/lib/auth.functions";
-import { exportVault, importVault, refreshPreviews } from "@/lib/vault.functions";
-import { useToast, useVault } from "@/hooks/useVault";
+import { exportVault, importVault, refreshPreviews, wipeVault } from "@/lib/vault.functions";
+import { useToast, useVault, VAULT_KEY } from "@/hooks/useVault";
 import { BottomNav, OfflineBanner, TopBar, useLock } from "@/components/store/chrome";
+import { ConfirmDialog } from "@/components/store/ConfirmDialog";
 import { Button, Toast } from "@/components/store/primitives";
 import { PageBackdrop } from "@/components/store/PageBackdrop";
 import type { ReactNode } from "react";
@@ -32,10 +34,10 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
-function Group({ label, children }: { label: string; children: ReactNode }) {
+function Group({ label, children, danger }: { label: string; children: ReactNode; danger?: boolean }) {
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="type-label px-1">{label}</h2>
+      <h2 className={danger ? "type-label px-1 text-error" : "type-label px-1"}>{label}</h2>
       <div className="overflow-hidden row-divide rounded-xl bg-surface elev-1">{children}</div>
     </section>
   );
@@ -55,19 +57,23 @@ function Row({ title, body, action }: { title: string; body: string; action: Rea
 
 function SettingsPage() {
   const lock = useLock();
+  const queryClient = useQueryClient();
   const { vault } = useVault();
   const { toast, setToast } = useToast();
   const refreshFn = useServerFn(refreshPreviews);
   const exportFn = useServerFn(exportVault);
   const importFn = useServerFn(importVault);
+  const wipeFn = useServerFn(wipeVault);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState<"refresh" | "export" | "import" | null>(null);
+  const [busy, setBusy] = useState<"refresh" | "export" | "import" | "wipe" | null>(null);
+  const [confirmWipeOpen, setConfirmWipeOpen] = useState(false);
 
   const refreshAll = async () => {
     setBusy("refresh");
     try {
       const { count } = await refreshFn({ data: { sectionId: null } });
       setToast(`Refreshed ${count} ${count === 1 ? "preview" : "previews"}`);
+      await queryClient.invalidateQueries({ queryKey: VAULT_KEY });
     } catch {
       setToast("Couldn't refresh previews");
     } finally {
@@ -84,7 +90,9 @@ function SettingsPage() {
       const anchor = document.createElement("a");
       anchor.href = href;
       anchor.download = `store-vault-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
       anchor.click();
+      document.body.removeChild(anchor);
       URL.revokeObjectURL(href);
       setToast("Backup downloaded");
     } catch {
@@ -95,16 +103,34 @@ function SettingsPage() {
   };
 
   const restore = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      return setToast("File too large (max 5MB)");
+    }
     setBusy("import");
     try {
       const payload = await file.text();
-      await importFn({ data: { payload } });
-      setToast("Vault restored");
+      const res = await importFn({ data: { payload } });
+      setToast(`Restored ${res.sections} sections and ${res.svgs} marks`);
+      await queryClient.invalidateQueries({ queryKey: VAULT_KEY });
     } catch (cause) {
       setToast(cause instanceof Error ? cause.message : "Import failed");
     } finally {
       setBusy(null);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleWipe = async () => {
+    setConfirmWipeOpen(false);
+    setBusy("wipe");
+    try {
+      await wipeFn();
+      await queryClient.invalidateQueries({ queryKey: VAULT_KEY });
+      setToast("All vault data wiped");
+    } catch {
+      setToast("Could not wipe vault");
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -123,7 +149,7 @@ function SettingsPage() {
           <Group label="Previews">
             <Row
               title="Refresh all previews"
-              body="Re-fetch titles, descriptions and images."
+              body="Re-fetch titles, descriptions and images for all links."
               action={
                 <Button
                   variant="surface"
@@ -141,7 +167,7 @@ function SettingsPage() {
             />
           </Group>
 
-          <Group label="Backup">
+          <Group label="Backup & Restore">
             <Row
               title="Export vault"
               body="Download every section, link and mark as JSON."
@@ -152,7 +178,7 @@ function SettingsPage() {
                   onClick={() => void download()}
                   disabled={busy !== null}
                 >
-                  <Download size={15} /> Export
+                  <Download size={15} /> {busy === "export" ? "Exporting…" : "Export"}
                 </Button>
               }
             />
@@ -184,6 +210,23 @@ function SettingsPage() {
               }
             />
           </Group>
+
+          <Group label="Danger Zone" danger>
+            <Row
+              title="Wipe vault data"
+              body="Permanently deletes all sections, links and marks."
+              action={
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setConfirmWipeOpen(true)}
+                  disabled={busy !== null}
+                >
+                  <Trash2 size={15} /> {busy === "wipe" ? "Wiping…" : "Wipe vault"}
+                </Button>
+              }
+            />
+          </Group>
         </div>
 
         <input
@@ -197,7 +240,18 @@ function SettingsPage() {
           }}
         />
       </main>
+
       <BottomNav active="settings" addLabel="Vault" onAdd={() => window.location.assign("/home")} />
+
+      <ConfirmDialog
+        open={confirmWipeOpen}
+        title="Wipe all vault data?"
+        body="This will permanently delete every section, link, action button and mark. This cannot be undone. Make sure you have downloaded a backup first."
+        confirmLabel="Wipe everything"
+        onConfirm={() => void handleWipe()}
+        onCancel={() => setConfirmWipeOpen(false)}
+      />
+
       <Toast message={toast} />
     </>
   );

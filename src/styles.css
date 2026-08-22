@@ -104,6 +104,7 @@
     -webkit-tap-highlight-color: transparent;
     color-scheme: dark;
     scrollbar-color: var(--surface-3) transparent;
+    overscroll-behavior-y: none;
   }
 
   body {
@@ -112,6 +113,7 @@
     font-family: var(--font-sans-stack);
     font-feature-settings: "calt", "kern", "liga", "ss03";
     -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
   }
 
   ::selection {

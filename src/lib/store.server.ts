@@ -842,46 +842,107 @@ type VaultBackup = {
   svgs?: { name?: string; url?: string }[];
 };
 
+function isHttpUrl(raw: string | undefined | null): boolean {
+  if (!raw || typeof raw !== "string") return false;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export async function svgCount(): Promise<number> {
+  const result = await db().execute("SELECT COUNT(*) AS count FROM svg_library");
+  return requiredInteger(result.rows[0]?.["count"], "count");
+}
+
 export async function importVault(payload: string): Promise<{ sections: number; svgs: number }> {
-  const parsed: VaultBackup = JSON.parse(payload);
+  let parsed: VaultBackup;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    throw new Error("Invalid backup file: Not valid JSON");
+  }
+
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid backup file: Root must be an object");
+  }
+
   let sections = 0;
   let svgs = 0;
 
-  for (const svg of parsed.svgs ?? []) {
-    if (!svg.name || !svg.url) continue;
-    await createSvg(svg.name, svg.url);
+  // Import SVGs with sanitization
+  for (const svg of (Array.isArray(parsed.svgs) ? parsed.svgs : [])) {
+    if (!svg || typeof svg !== "object") continue;
+    const name = typeof svg.name === "string" ? svg.name.trim().slice(0, 40) : "";
+    const url = typeof svg.url === "string" ? svg.url.trim() : "";
+    if (!name || !isHttpUrl(url)) continue;
+    if ((await svgCount()) >= MAX_SVGS) break;
+    await createSvg(name, url);
     svgs += 1;
   }
 
-  for (const section of parsed.sections ?? []) {
-    if (!section.name) continue;
+  // Import Sections & Links with sanitization
+  for (const section of (Array.isArray(parsed.sections) ? parsed.sections : [])) {
+    if (!section || typeof section !== "object") continue;
+    const name = typeof section.name === "string" ? section.name.trim().slice(0, 60) : "";
+    if (!name) continue;
     if ((await sectionCount()) >= MAX_SECTIONS) break;
-    const created = await createSection(
-      section.name,
-      SECTION_COLORS.find((color) => color === section.colorToken) ?? null,
-      section.svgUrl ?? null,
-    );
+
+    const svgUrl = section.svgUrl && isHttpUrl(section.svgUrl) ? section.svgUrl : null;
+    const colorToken = SECTION_COLORS.find((c) => c === section.colorToken) ?? null;
+
+    const created = await createSection(name, colorToken, svgUrl);
     sections += 1;
-    for (const asset of section.assets ?? []) {
-      if (!asset.url) continue;
+
+    for (const asset of (Array.isArray(section.assets) ? section.assets : [])) {
+      if (!asset || typeof asset !== "object") continue;
+      const assetUrl = typeof asset.url === "string" ? asset.url.trim() : "";
+      if (!isHttpUrl(assetUrl)) continue;
+
+      const title = typeof asset.title === "string" ? asset.title.trim().slice(0, 120) : null;
+      const iconSvgUrl = asset.iconSvgUrl && isHttpUrl(asset.iconSvgUrl) ? asset.iconSvgUrl : null;
+      const previewEnabled = asset.previewEnabled !== false;
+      const actionMode = asset.actionMode === "copy" ? "copy" : "open";
+
+      const validRows = (Array.isArray(asset.rows) ? asset.rows : [])
+        .filter((row): row is { url: string; label?: string | null; svgUrl?: string | null; mode?: string } =>
+          Boolean(row && typeof row === "object" && typeof row.url === "string" && isHttpUrl(row.url))
+        )
+        .slice(0, 6)
+        .map((row) => ({
+          svgUrl: row.svgUrl && isHttpUrl(row.svgUrl) ? row.svgUrl : null,
+          label: typeof row.label === "string" ? row.label.trim().slice(0, 40) : null,
+          url: row.url.trim(),
+          mode: (row.mode === "copy" ? "copy" : "open") as ActionMode,
+        }));
+
       await insertAsset({
         sectionId: created.id,
-        url: asset.url,
-        title: asset.title ?? null,
-        iconSvgUrl: asset.iconSvgUrl ?? null,
-        previewEnabled: asset.previewEnabled !== false,
-        actionMode: asset.actionMode === "copy" ? "copy" : "open",
-        rows: (asset.rows ?? [])
-          .filter((row): row is { url: string } & typeof row => Boolean(row.url))
-          .map((row) => ({
-            svgUrl: row.svgUrl ?? null,
-            label: row.label ?? null,
-            url: row.url,
-            mode: row.mode === "copy" ? "copy" : "open",
-          })),
+        url: assetUrl,
+        title,
+        iconSvgUrl,
+        previewEnabled,
+        actionMode,
+        rows: validRows,
       });
     }
   }
 
   return { sections, svgs };
+}
+
+export async function wipeVaultData(): Promise<{ ok: true }> {
+  await db().batch(
+    [
+      { sql: "DELETE FROM preview_cache", args: [] },
+      { sql: "DELETE FROM asset_rows", args: [] },
+      { sql: "DELETE FROM assets", args: [] },
+      { sql: "DELETE FROM sections", args: [] },
+      { sql: "DELETE FROM svg_library", args: [] },
+    ],
+    "write",
+  );
+  return { ok: true };
 }

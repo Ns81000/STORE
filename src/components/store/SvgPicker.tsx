@@ -199,7 +199,7 @@ export function SvgPicker({
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search marks by name…"
-                className="h-10 w-full rounded-xl bg-surface-2 pl-9 pr-8 text-sm text-ink outline-none placeholder:text-ink-faint focus:shadow-[var(--glow-accent)]"
+                className="h-10 w-full rounded-xl border border-hairline bg-surface-2 pl-9 pr-8 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent focus:bg-surface-3"
                 autoFocus
               />
               {searchQuery ? (

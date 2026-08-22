@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Grid, Plus, Search, Shapes, Trash2, X } from "lucide-react";
+import { ArrowUpRight, Copy, Globe, Grid, Plus, Search, Shapes, Trash2, X } from "lucide-react";
 import { createSvg, deleteSvg } from "@/lib/vault.functions";
 import { useVaultMutation } from "@/hooks/useVault";
 import { MAX_SVGS, type SvgIcon } from "@/lib/store.types";
 import { Modal } from "./Modal";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { SvgMark } from "./SvgMark";
-import { Button, IconButton, SegmentedControl, TextInput } from "./primitives";
-import { cn } from "@/lib/utils";
+import { Button, SegmentedControl, TextInput } from "./primitives";
 
 type SvgLibraryProps = {
   open: boolean;
@@ -36,6 +36,8 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
   const [url, setUrl] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SvgIcon | null>(null);
+  const [inspecting, setInspecting] = useState<SvgIcon | null>(null);
 
   const add = useVaultMutation(useServerFn(createSvg));
   const remove = useVaultMutation(useServerFn(deleteSvg));
@@ -122,8 +124,22 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
         />
       </div>
 
+      {/* Resource link: thesvg.org */}
+      <a
+        href="https://thesvg.org/"
+        target="_blank"
+        rel="noreferrer noopener"
+        className="press focus-ring flex items-center justify-between rounded-lg bg-surface-3/60 px-3 py-2 text-xs text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+      >
+        <span className="flex items-center gap-2">
+          <Globe size={13} className="text-accent" />
+          <span>Find SVGs on <strong className="text-ink">thesvg.org</strong></span>
+        </span>
+        <ArrowUpRight size={13} className="text-ink-faint" />
+      </a>
+
       {/* Quick 1-Click Presets */}
-      <div className="flex flex-col gap-1.5 pt-1">
+      <div className="flex flex-col gap-1.5 pt-0.5">
         <span className="type-label text-[10px] text-ink-faint">Popular Presets:</span>
         <div className="flex flex-wrap gap-1.5">
           {SUGGESTED_MARKS.map((preset) => (
@@ -155,9 +171,9 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
   // Marks Grid Component (shared across desktop right pane & mobile Marks tab)
   const marksGrid = (
     <div className="flex flex-1 flex-col gap-3.5">
-      {/* Search Bar */}
+      {/* Search Bar with unclipped border */}
       {svgs.length > 0 ? (
-        <div className="relative">
+        <div className="relative pt-0.5">
           <Search
             size={14}
             className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint"
@@ -167,7 +183,7 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
             onChange={(event) => setQuery(event.target.value)}
             type="search"
             placeholder={`Search ${svgs.length} marks…`}
-            className="h-10 w-full rounded-xl bg-surface-2 pl-9 pr-8 text-sm text-ink outline-none placeholder:text-ink-faint focus:shadow-[var(--glow-accent)]"
+            className="h-10 w-full rounded-xl border border-hairline bg-surface-2 pl-9 pr-8 text-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent focus:bg-surface-3"
           />
           {query ? (
             <button
@@ -200,10 +216,14 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
           <p className="type-caption text-ink-faint">No marks match “{query}”.</p>
         </div>
       ) : (
-        <ul className="grid max-h-[30rem] grid-cols-3 gap-2.5 overflow-y-auto pr-1 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
+        <ul className="grid max-h-[30rem] grid-cols-3 gap-2.5 overflow-y-auto p-1 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5">
           {visible.map((icon) => (
-            <li key={icon.id} className="group relative">
-              <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl bg-surface-2/70 p-2.5 transition-colors duration-150 hover:bg-surface-2">
+            <li key={icon.id}>
+              <button
+                type="button"
+                onClick={() => setInspecting(icon)}
+                className="press focus-ring flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-xl bg-surface-2/70 p-2.5 transition-all duration-150 hover:bg-surface-2 hover:-translate-y-0.5"
+              >
                 <SvgMark
                   url={icon.url}
                   fallback={icon.name}
@@ -213,18 +233,7 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
                 <span className="type-caption w-full truncate text-center text-xs font-medium text-ink-muted">
                   {icon.name}
                 </span>
-              </div>
-              <IconButton
-                label={`Delete ${icon.name}`}
-                size="sm"
-                className="absolute right-1.5 top-1.5 bg-canvas/80 text-ink-faint opacity-100 backdrop-blur transition-opacity duration-150 hover:text-error sm:opacity-0 sm:group-hover:opacity-100"
-                onClick={async () => {
-                  await remove.mutateAsync({ data: { id: icon.id } });
-                  onDone(`Deleted ${icon.name}`);
-                }}
-              >
-                <Trash2 size={13} />
-              </IconButton>
+              </button>
             </li>
           ))}
         </ul>
@@ -233,45 +242,110 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
   );
 
   return (
-    <Modal
-      open={open}
-      title="Mark Library"
-      subtitle={`${svgs.length} of ${MAX_SVGS} marks saved — reusable across sections, links and action rows.`}
-      onClose={onClose}
-      width="xl"
-    >
-      <div className="flex flex-col gap-4 pb-2">
-        {/* Mobile View Switcher (< 1024px) */}
-        <div className="lg:hidden">
-          <SegmentedControl
-            value={activeTab}
-            onChange={setActiveTab}
-            options={[
-              {
-                value: "marks",
-                label: `Saved Marks (${svgs.length})`,
-                icon: <Grid size={14} />,
-              },
-              {
-                value: "add",
-                label: "Add New Mark",
-                icon: <Plus size={14} />,
-              },
-            ]}
-          />
-        </div>
+    <>
+      <Modal
+        open={open}
+        title="Mark Library"
+        subtitle={`${svgs.length} of ${MAX_SVGS} marks saved — reusable across sections, links and action rows.`}
+        onClose={onClose}
+        width="xl"
+      >
+        <div className="flex flex-col gap-4 pb-2">
+          {/* Mobile View Switcher (< 1024px) */}
+          <div className="lg:hidden">
+            <SegmentedControl
+              value={activeTab}
+              onChange={setActiveTab}
+              options={[
+                {
+                  value: "marks",
+                  label: `Saved Marks (${svgs.length})`,
+                  icon: <Grid size={14} />,
+                },
+                {
+                  value: "add",
+                  label: "Add New Mark",
+                  icon: <Plus size={14} />,
+                },
+              ]}
+            />
+          </div>
 
-        {/* Mobile View: Render active tab */}
-        <div className="lg:hidden">
-          {activeTab === "marks" ? marksGrid : composer}
-        </div>
+          {/* Mobile View: Render active tab */}
+          <div className="lg:hidden">
+            {activeTab === "marks" ? marksGrid : composer}
+          </div>
 
-        {/* Desktop View (>= 1024px): Panoramic 2-Column Workstation */}
-        <div className="hidden lg:grid lg:grid-cols-[20.5rem_minmax(0,1fr)] lg:gap-6 lg:items-start">
-          {composer}
-          {marksGrid}
+          {/* Desktop View (>= 1024px): Panoramic 2-Column Workstation */}
+          <div className="hidden lg:grid lg:grid-cols-[20.5rem_minmax(0,1fr)] lg:gap-6 lg:items-start">
+            {composer}
+            {marksGrid}
+          </div>
         </div>
-      </div>
-    </Modal>
+      </Modal>
+
+      {/* Mark Details Inspection Modal (Mobile tap & Desktop details) */}
+      <Modal
+        open={inspecting !== null}
+        title={inspecting?.name ?? "Mark Details"}
+        subtitle="Saved mark in your library"
+        onClose={() => setInspecting(null)}
+        width="sm"
+        zIndex="z-[85]"
+      >
+        {inspecting ? (
+          <div className="flex flex-col items-center gap-4 py-2 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-surface-2 p-3">
+              <SvgMark url={inspecting.url} fallback={inspecting.name} size={48} />
+            </div>
+            <div className="w-full">
+              <p className="type-title-sm text-ink">{inspecting.name}</p>
+              <p className="type-caption truncate mt-1 text-xs text-ink-faint">{inspecting.url}</p>
+            </div>
+            <div className="flex w-full gap-2 pt-2">
+              <Button
+                variant="surface"
+                size="sm"
+                className="flex-1 justify-center"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(inspecting.url);
+                  onDone("Mark URL copied");
+                }}
+              >
+                <Copy size={14} /> Copy URL
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                className="flex-1 justify-center"
+                onClick={() => {
+                  const toDelete = inspecting;
+                  setInspecting(null);
+                  setPendingDelete(toDelete);
+                }}
+              >
+                <Trash2 size={14} /> Delete
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      {/* Safe Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={`Delete "${pendingDelete?.name}"?`}
+        body="This mark will be permanently removed from your library."
+        confirmLabel="Delete mark"
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          const target = pendingDelete;
+          setPendingDelete(null);
+          await remove.mutateAsync({ data: { id: target.id } });
+          onDone(`Deleted ${target.name}`);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
+    </>
   );
 }

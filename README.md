@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/Ns81000/STORE/main/public/store-icon-transparent.svg" width="96" height="96" alt="STORE Logo" />
   <h1>STORE</h1>
-  <p><strong>Personal Link Vault and Command Center</strong></p>
+  <p><strong>Personal Link Vault</strong></p>
   <p>A minimalist, self-hosted bookmarks workstation with server-side rendering, cryptographic access control, and instant link execution.</p>
 
   <p>

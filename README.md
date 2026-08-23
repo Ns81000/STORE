@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Ns81000/STORE/main/public/store-icon-transparent.svg" width="88" height="88" alt="STORE Logo" />
+  <img src="https://raw.githubusercontent.com/Ns81000/STORE/main/public/store-icon-transparent.svg" width="96" height="96" alt="STORE Logo" />
   <h1>STORE</h1>
   <p><strong>Personal Link Vault and Command Center</strong></p>
   <p>A minimalist, self-hosted bookmarks workstation with server-side rendering, cryptographic access control, and instant link execution.</p>
@@ -45,14 +45,16 @@ STORE is a single-tenant personal link repository and dashboard. Designed around
 
 ## Tech Stack
 
-| Layer | Technologies |
-|---|---|
-| **Framework & SSR** | TanStack Start, TanStack Router, TanStack Query, Nitro |
-| **UI & Styling** | React 19, Tailwind CSS v4, Lucide Icons, Radix UI Primitives |
-| **Database** | Turso (libSQL / SQLite dialect) via `@libsql/client` |
-| **Validation & Security** | Zod, bcryptjs, Web Crypto API |
-| **Interactions** | `@dnd-kit` (Core, Sortable, Utilities) |
-| **Package Manager** | `pnpm` exclusively |
+| Layer | Technology | Brand Mark | Details |
+|---|---|:---:|---|
+| **Framework & SSR** | TanStack Start | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/react/default.svg" width="20" height="20" alt="React" /> | Server-side rendering, routing, full-stack typed functions |
+| **Frontend UI** | React 19 | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/react/default.svg" width="20" height="20" alt="React 19" /> | Modern component architecture, server actions, transitions |
+| **Language** | TypeScript | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/typescript/default.svg" width="20" height="20" alt="TypeScript" /> | Strict typing, zod schema validation, client-server sync |
+| **Styling** | Tailwind CSS v4 | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/tailwindcss/default.svg" width="20" height="20" alt="Tailwind CSS" /> | Native CSS theme variables, tone glow tokens, glassmorphism |
+| **Database** | Turso (libSQL) | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/turso/dark.svg" width="20" height="20" alt="Turso" /> | Distributed edge SQLite dialect via `@libsql/client` |
+| **Bundler** | Vite 8 | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/vite/default.svg" width="20" height="20" alt="Vite" /> | Fast development server and optimized production build |
+| **Package Manager** | pnpm | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/pnpm/default.svg" width="20" height="20" alt="pnpm" /> | Fast, disk space efficient package management |
+| **Hosting** | Vercel | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/vercel/default.svg" width="20" height="20" alt="Vercel" /> | Serverless functions with Nitro deployment preset |
 
 ---
 
@@ -61,11 +63,13 @@ STORE is a single-tenant personal link repository and dashboard. Designed around
 This walkthrough covers deploying your own instance of STORE using **Turso** for the database and **Vercel** for hosting.
 
 ### 1. Prerequisites
-Ensure you have the following installed on your local machine:
-* **Node.js:** `v22.0.0` or higher
-* **pnpm:** `v10.0.0` or higher (`corepack enable pnpm`)
-* **Turso CLI:** Installed via `curl -sSfL https://get.tur.so/install.sh | bash` (or use the [Turso Web Console](https://turso.tech/))
-* **Git**
+
+Make sure the following tools are installed on your environment:
+
+* <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/nodejs/default.svg" width="16" height="16" alt="Node.js" valign="middle" /> **Node.js:** `v22.0.0` or higher
+* <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/pnpm/default.svg" width="16" height="16" alt="pnpm" valign="middle" /> **pnpm:** `v10.0.0` or higher (`corepack enable pnpm`)
+* <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/turso/dark.svg" width="16" height="16" alt="Turso" valign="middle" /> **Turso CLI:** Installed via `curl -sSfL https://get.tur.so/install.sh | bash` (or use the [Turso Web Console](https://turso.tech/))
+* <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/git/default.svg" width="16" height="16" alt="Git" valign="middle" /> **Git**
 
 ---
 
@@ -143,7 +147,7 @@ Paste the generated string into `SESSION_SECRET`.
 
 ### 5. Initialize Database Schema
 
-Run the database migration script to construct the tables and indices:
+Run the database migration script to construct all tables and indices in Turso:
 
 ```bash
 pnpm db:init
@@ -199,7 +203,7 @@ Open `http://localhost:3000` in your browser. Enter your configured password to 
 
 #### Method B: Deploy via Vercel Dashboard
 
-1. Push your repository to GitHub.
+1. Push your repository to GitHub (`https://github.com/Ns81000/STORE`).
 2. Navigate to [Vercel Dashboard](https://vercel.com/new) and click **Import Project**.
 3. Under **Environment Variables**, add the four required keys:
    * `TURSO_DATABASE_URL`
@@ -286,6 +290,12 @@ pnpm db:init
 # Generate password hash
 pnpm hash-password
 ```
+
+---
+
+## Brand & Icon Assets
+
+Brand vector assets are delivered via the [theSVG](https://thesvg.org) open-source icon repository and CDN.
 
 ---
 

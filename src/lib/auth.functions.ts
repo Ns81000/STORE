@@ -3,7 +3,7 @@ import { unlockInput } from "./store.schemas";
 import { attemptUnlock, endSession, readSessionState } from "./auth.server";
 
 export const unlockStore = createServerFn({ method: "POST" })
-  .inputValidator(unlockInput.parse)
+  .validator((data: unknown) => unlockInput.parse(data))
   .handler(async ({ data }) => attemptUnlock(data.password));
 
 export const getSessionState = createServerFn({ method: "GET" }).handler(async () =>

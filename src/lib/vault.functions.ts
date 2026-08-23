@@ -41,14 +41,14 @@ export const listVault = createServerFn({ method: "POST" }).handler(async () => 
 });
 
 export const createSection = createServerFn({ method: "POST" })
-  .inputValidator(createSectionInput.parse)
+  .validator((data: unknown) => createSectionInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     return createSectionRow(data.name, data.colorToken, data.svgUrl);
   });
 
 export const updateSection = createServerFn({ method: "POST" })
-  .inputValidator(updateSectionInput.parse)
+  .validator((data: unknown) => updateSectionInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await updateSectionRow(data.id, data.name, data.colorToken, data.svgUrl);
@@ -56,7 +56,7 @@ export const updateSection = createServerFn({ method: "POST" })
   });
 
 export const recolorSection = createServerFn({ method: "POST" })
-  .inputValidator(recolorSectionInput.parse)
+  .validator((data: unknown) => recolorSectionInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await recolorSectionRow(data.id, data.colorToken);
@@ -64,7 +64,7 @@ export const recolorSection = createServerFn({ method: "POST" })
   });
 
 export const deleteSection = createServerFn({ method: "POST" })
-  .inputValidator(idInput.parse)
+  .validator((data: unknown) => idInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await deleteRow("sections", data.id);
@@ -72,7 +72,7 @@ export const deleteSection = createServerFn({ method: "POST" })
   });
 
 export const reorderSections = createServerFn({ method: "POST" })
-  .inputValidator(reorderInput.parse)
+  .validator((data: unknown) => reorderInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await applyOrder("sections", data.ids);
@@ -80,7 +80,7 @@ export const reorderSections = createServerFn({ method: "POST" })
   });
 
 export const createAsset = createServerFn({ method: "POST" })
-  .inputValidator(createAssetInput.parse)
+  .validator((data: unknown) => createAssetInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     const id = await insertAsset(data);
@@ -88,7 +88,7 @@ export const createAsset = createServerFn({ method: "POST" })
   });
 
 export const updateAsset = createServerFn({ method: "POST" })
-  .inputValidator(updateAssetInput.parse)
+  .validator((data: unknown) => updateAssetInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await updateAssetRow(data.id, data);
@@ -96,7 +96,7 @@ export const updateAsset = createServerFn({ method: "POST" })
   });
 
 export const deleteAsset = createServerFn({ method: "POST" })
-  .inputValidator(idInput.parse)
+  .validator((data: unknown) => idInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await deleteRow("assets", data.id);
@@ -104,7 +104,7 @@ export const deleteAsset = createServerFn({ method: "POST" })
   });
 
 export const reorderAssets = createServerFn({ method: "POST" })
-  .inputValidator(reorderAssetsInput.parse)
+  .validator((data: unknown) => reorderAssetsInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await applyOrder("assets", data.ids);
@@ -112,7 +112,7 @@ export const reorderAssets = createServerFn({ method: "POST" })
   });
 
 export const refreshPreview = createServerFn({ method: "POST" })
-  .inputValidator(refreshPreviewInput.parse)
+  .validator((data: unknown) => refreshPreviewInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await refreshPreviewFor(data.id, data.url);
@@ -120,7 +120,7 @@ export const refreshPreview = createServerFn({ method: "POST" })
   });
 
 export const refreshPreviews = createServerFn({ method: "POST" })
-  .inputValidator(refreshScopeInput.parse)
+  .validator((data: unknown) => refreshScopeInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     const count = await refreshAllPreviews(data.sectionId ?? undefined);
@@ -135,7 +135,7 @@ export const getPreviewData = createServerFn({ method: "POST" })
   });
 
 export const createSvg = createServerFn({ method: "POST" })
-  .inputValidator(createSvgInput.parse)
+  .validator((data: unknown) => createSvgInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     const id = await createSvgRow(data.name, data.url);
@@ -143,7 +143,7 @@ export const createSvg = createServerFn({ method: "POST" })
   });
 
 export const updateSvg = createServerFn({ method: "POST" })
-  .inputValidator(updateSvgInput.parse)
+  .validator((data: unknown) => updateSvgInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await updateSvgRow(data.id, data.name, data.url);
@@ -151,7 +151,7 @@ export const updateSvg = createServerFn({ method: "POST" })
   });
 
 export const deleteSvg = createServerFn({ method: "POST" })
-  .inputValidator(idInput.parse)
+  .validator((data: unknown) => idInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     await deleteSvgRow(data.id);
@@ -164,7 +164,7 @@ export const exportVault = createServerFn({ method: "GET" }).handler(async () =>
 });
 
 export const importVault = createServerFn({ method: "POST" })
-  .inputValidator(importInput.parse)
+  .validator((data: unknown) => importInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     return importVaultData(data.payload);

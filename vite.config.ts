@@ -18,11 +18,11 @@ const securityRouteRules = isDev
         headers: {
           "content-security-policy": [
             "default-src 'self'",
-            "script-src 'self'",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "font-src 'self' data: https://fonts.gstatic.com",
             "img-src 'self' data: blob: https:",
-            "connect-src 'self'",
+            "connect-src 'self' https: data: blob:",
             "object-src 'none'",
             "base-uri 'self'",
             "form-action 'self'",

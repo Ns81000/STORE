@@ -74,7 +74,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5" },
+      {
+        name: "viewport",
+        content: "width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5",
+      },
       { title: "STORE — Private link vault" },
       { name: "description", content: "A password-protected vault for links, files and tools." },
       { name: "theme-color", content: "#07080a" },
@@ -101,7 +104,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Work+Sans:wght@400;500;600&display=swap",
       },
       { rel: "icon", href: "/icon.svg", type: "image/svg+xml" },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
   }),
@@ -141,4 +144,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-

@@ -180,7 +180,9 @@ export function SvgPicker({
                 <Shapes size={13} />
                 <span>Manage library</span>
               </button>
-            ) : <span />}
+            ) : (
+              <span />
+            )}
             <Button variant="surface" size="sm" onClick={() => setSelectorOpen(false)}>
               Close
             </Button>

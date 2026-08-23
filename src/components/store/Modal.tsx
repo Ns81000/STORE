@@ -52,7 +52,9 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className={cn("fixed inset-0 flex items-end justify-center sm:items-center sm:p-6", zIndex)}>
+    <div
+      className={cn("fixed inset-0 flex items-end justify-center sm:items-center sm:p-6", zIndex)}
+    >
       <button
         tabIndex={-1}
         aria-label="Close"

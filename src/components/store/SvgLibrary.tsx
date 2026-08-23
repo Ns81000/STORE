@@ -133,7 +133,9 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
       >
         <span className="flex items-center gap-2">
           <Globe size={13} className="text-accent" />
-          <span>Find SVGs on <strong className="text-ink">thesvg.org</strong></span>
+          <span>
+            Find SVGs on <strong className="text-ink">thesvg.org</strong>
+          </span>
         </span>
         <ArrowUpRight size={13} className="text-ink-faint" />
       </a>
@@ -272,9 +274,7 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
           </div>
 
           {/* Mobile View: Render active tab */}
-          <div className="lg:hidden">
-            {activeTab === "marks" ? marksGrid : composer}
-          </div>
+          <div className="lg:hidden">{activeTab === "marks" ? marksGrid : composer}</div>
 
           {/* Desktop View (>= 1024px): Panoramic 2-Column Workstation */}
           <div className="hidden lg:grid lg:grid-cols-[20.5rem_minmax(0,1fr)] lg:gap-6 lg:items-start">

@@ -121,13 +121,18 @@ export function PwaInstallPrompt() {
         <div className="flex items-start gap-3.5 pr-6">
           {/* App Icon (STORE Vault SVG Mark) */}
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface-3 p-1.5">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 512 512"
-              className="h-full w-full"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" className="h-full w-full">
               <rect width="512" height="512" rx="120" fill="#07080a" />
-              <rect x="24" y="24" width="464" height="464" rx="96" fill="#101111" stroke="#242728" strokeWidth="6" />
+              <rect
+                x="24"
+                y="24"
+                width="464"
+                height="464"
+                rx="96"
+                fill="#101111"
+                stroke="#242728"
+                strokeWidth="6"
+              />
               <rect x="136" y="136" width="240" height="240" rx="48" fill="#ff6161" />
               <rect x="180" y="180" width="152" height="152" rx="30" fill="#07080a" />
               <circle cx="256" cy="256" r="32" fill="#ff6161" />
@@ -164,7 +169,8 @@ export function PwaInstallPrompt() {
                 1
               </span>
               <span>
-                Tap the <strong className="text-ink">Share</strong> button <Share size={13} className="inline text-accent" /> in Safari.
+                Tap the <strong className="text-ink">Share</strong> button{" "}
+                <Share size={13} className="inline text-accent" /> in Safari.
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -172,7 +178,8 @@ export function PwaInstallPrompt() {
                 2
               </span>
               <span>
-                Select <strong className="text-ink">Add to Home Screen</strong> <SquarePlus size={13} className="inline text-accent" />.
+                Select <strong className="text-ink">Add to Home Screen</strong>{" "}
+                <SquarePlus size={13} className="inline text-accent" />.
               </span>
             </div>
           </div>
@@ -180,12 +187,7 @@ export function PwaInstallPrompt() {
 
         {/* Action Buttons */}
         <div className="mt-3.5 flex items-center justify-end gap-2">
-          <Button
-            variant="surface"
-            size="sm"
-            onClick={dismiss}
-            className="text-xs"
-          >
+          <Button variant="surface" size="sm" onClick={dismiss} className="text-xs">
             Later
           </Button>
           <Button

@@ -288,7 +288,7 @@ export function GradientWaves({
     const setSize = () => {
       const rect = container.getBoundingClientRect();
       renderer.setSize(Math.max(1, Math.floor(rect.width)), Math.max(1, Math.floor(rect.height)));
-      const res = program.uniforms['iResolution']!.value as Float32Array;
+      const res = program.uniforms["iResolution"]!.value as Float32Array;
       res[0] = gl.drawingBufferWidth;
       res[1] = gl.drawingBufferHeight;
       renderer.render({ scene: mesh });
@@ -320,10 +320,10 @@ export function GradientWaves({
     const t0 = performance.now();
 
     const loop = (t: number) => {
-      program.uniforms['iTime']!.value = (t - t0) * 0.001;
+      program.uniforms["iTime"]!.value = (t - t0) * 0.001;
       current[0] += 0.05 * (target[0] - current[0]);
       current[1] += 0.05 * (target[1] - current[1]);
-      const mouse = program.uniforms['uMouse']!.value as Float32Array;
+      const mouse = program.uniforms["uMouse"]!.value as Float32Array;
       mouse[0] = current[0];
       mouse[1] = current[1];
       renderer.render({ scene: mesh });

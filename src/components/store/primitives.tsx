@@ -109,9 +109,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
           <div className="absolute right-1.5 top-1/2 -translate-y-1/2">{adornment}</div>
         ) : null}
       </div>
-      {hint ? (
-        <p className={cn("type-caption", invalid && "text-error")}>{hint}</p>
-      ) : null}
+      {hint ? <p className={cn("type-caption", invalid && "text-error")}>{hint}</p> : null}
     </div>
   );
 });

@@ -53,7 +53,9 @@ export function SectionModal({
     if (!trimmed) return setError("Give the section a name.");
     try {
       if (section) {
-        await update.mutateAsync({ data: { id: section.id, name: trimmed, colorToken: tone, svgUrl } });
+        await update.mutateAsync({
+          data: { id: section.id, name: trimmed, colorToken: tone, svgUrl },
+        });
       } else {
         await create.mutateAsync({ data: { name: trimmed, colorToken: tone, svgUrl } });
       }
@@ -124,7 +126,6 @@ export function SectionModal({
               </button>
             ))}
           </div>
-
         </div>
 
         <SvgPicker

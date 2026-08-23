@@ -55,7 +55,8 @@ function Field({
       {children}
     </section>
   );
-}export function AssetEditor({
+}
+export function AssetEditor({
   open,
   sectionId,
   asset,
@@ -172,15 +173,13 @@ function Field({
 
   const domain = hasValidUrl ? domainOf(cleanUrl) : "example.com";
   const displayTitle =
-    title.trim() ||
-    (asset && asset.url === cleanUrl ? asset.preview?.ogTitle : null) ||
-    domain;
+    title.trim() || (asset && asset.url === cleanUrl ? asset.preview?.ogTitle : null) || domain;
 
   const previewImageUrl =
     previewEnabled && hasValidUrl
-      ? (asset && asset.url === cleanUrl && asset.preview?.ogImageUrl
-          ? asset.preview.ogImageUrl
-          : `https://s0.wp.com/mshots/v1/${encodeURIComponent(cleanUrl)}?w=600`)
+      ? asset && asset.url === cleanUrl && asset.preview?.ogImageUrl
+        ? asset.preview.ogImageUrl
+        : `https://s0.wp.com/mshots/v1/${encodeURIComponent(cleanUrl)}?w=600`
       : null;
 
   return (
@@ -242,7 +241,9 @@ function Field({
               <div className="flex items-center justify-between gap-3 pt-1">
                 <div className="min-w-0">
                   <span className="type-title-sm block text-xs">Rich preview</span>
-                  <span className="type-caption text-[11px] text-ink-faint">Fetch metadata & cover</span>
+                  <span className="type-caption text-[11px] text-ink-faint">
+                    Fetch metadata & cover
+                  </span>
                 </div>
                 <Switch
                   checked={previewEnabled}
@@ -268,18 +269,19 @@ function Field({
           <div className="flex items-baseline justify-between gap-3">
             <div>
               <span className="type-label">Action rows</span>
-              <span className="type-caption ml-2 text-ink-faint">({rows.length}/{MAX_ROWS})</span>
+              <span className="type-caption ml-2 text-ink-faint">
+                ({rows.length}/{MAX_ROWS})
+              </span>
             </div>
-            <span className="type-caption text-ink-faint">
-              Small one-tap buttons on card
-            </span>
+            <span className="type-caption text-ink-faint">Small one-tap buttons on card</span>
           </div>
 
           {rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl bg-surface-2/60 px-5 py-12 text-center hairline-soft">
               <p className="type-title-sm text-ink-muted">No action rows yet</p>
               <p className="type-caption mt-1.5 max-w-xs text-ink-subtle">
-                Add up to 6 quick buttons with their own URLs, custom marks and Open or Copy actions.
+                Add up to 6 quick buttons with their own URLs, custom marks and Open or Copy
+                actions.
               </p>
               <Button
                 variant="primary"
@@ -328,9 +330,7 @@ function Field({
                     <button
                       type="button"
                       title={row.svgUrl ? "Change row mark" : "Add row mark"}
-                      onClick={() =>
-                        setActivePickerRow(activePickerRow === index ? null : index)
-                      }
+                      onClick={() => setActivePickerRow(activePickerRow === index ? null : index)}
                       className={cn(
                         "press focus-ring inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors",
                         row.svgUrl
@@ -340,7 +340,11 @@ function Field({
                       )}
                     >
                       {row.svgUrl ? (
-                        <SvgMark url={row.svgUrl} fallback={row.label || `R${index + 1}`} size={18} />
+                        <SvgMark
+                          url={row.svgUrl}
+                          fallback={row.label || `R${index + 1}`}
+                          size={18}
+                        />
                       ) : (
                         <Shapes size={14} />
                       )}
@@ -403,67 +407,65 @@ function Field({
             {previewEnabled ? (
               <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface">
                 {previewImageUrl && asset ? (
-                    <img
-                      key={previewImageUrl}
-                      src={previewImageUrl}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      className="h-full w-full object-cover transition-transform duration-300"
-                    />
-                  ) : (
-                    <div
-                      className="generated-cover flex h-full w-full flex-col items-center justify-center gap-2"
-                      style={{ ["--tone" as string]: toneForKey(domain) }}
-                    >
-                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-canvas/40 hairline-soft">
-                        {iconSvgUrl ? (
-                          <SvgMark url={iconSvgUrl} fallback={domain} size={24} />
-                        ) : (
-                          <span className="text-sm font-semibold" style={{ color: "var(--tone)" }}>
-                            {initialsOf(domain)}
-                          </span>
-                        )}
-                      </span>
-                      <span className="type-caption">{domain}</span>
-                    </div>
-                  )}
-                </div>
-              ) : null}
-              <div className="flex flex-col gap-3 p-3.5">
-                <div className="flex items-start gap-2.5">
-                  <SvgMark url={iconSvgUrl} fallback={domain} size={22} className="mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="type-title-sm truncate">{displayTitle}</p>
-                    <p className="type-caption truncate">{domain}</p>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <span
-                    className={`inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${
-                      actionMode === "copy"
-                        ? "bg-surface-3 text-ink"
-                        : "bg-accent text-on-accent"
-                    }`}
+                  <img
+                    key={previewImageUrl}
+                    src={previewImageUrl}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover transition-transform duration-300"
+                  />
+                ) : (
+                  <div
+                    className="generated-cover flex h-full w-full flex-col items-center justify-center gap-2"
+                    style={{ ["--tone" as string]: toneForKey(domain) }}
                   >
-                    {actionMode === "copy" ? "Copy link" : "Open"}
-                  </span>
-                  {rows.map((row, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-surface-3 text-ink-subtle"
-                    >
-                      {row.svgUrl ? (
-                        <SvgMark url={row.svgUrl} fallback={row.label ?? "row"} size={15} />
-                      ) : row.mode === "copy" ? (
-                        <Copy size={13} />
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-canvas/40 hairline-soft">
+                      {iconSvgUrl ? (
+                        <SvgMark url={iconSvgUrl} fallback={domain} size={24} />
                       ) : (
-                        <ArrowUpRight size={13} />
+                        <span className="text-sm font-semibold" style={{ color: "var(--tone)" }}>
+                          {initialsOf(domain)}
+                        </span>
                       )}
                     </span>
-                  ))}
+                    <span className="type-caption">{domain}</span>
+                  </div>
+                )}
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-3 p-3.5">
+              <div className="flex items-start gap-2.5">
+                <SvgMark url={iconSvgUrl} fallback={domain} size={22} className="mt-0.5" />
+                <div className="min-w-0">
+                  <p className="type-title-sm truncate">{displayTitle}</p>
+                  <p className="type-caption truncate">{domain}</p>
                 </div>
               </div>
+              <div className="flex flex-wrap gap-1.5">
+                <span
+                  className={`inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${
+                    actionMode === "copy" ? "bg-surface-3 text-ink" : "bg-accent text-on-accent"
+                  }`}
+                >
+                  {actionMode === "copy" ? "Copy link" : "Open"}
+                </span>
+                {rows.map((row, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-surface-3 text-ink-subtle"
+                  >
+                    {row.svgUrl ? (
+                      <SvgMark url={row.svgUrl} fallback={row.label ?? "row"} size={15} />
+                    ) : row.mode === "copy" ? (
+                      <Copy size={13} />
+                    ) : (
+                      <ArrowUpRight size={13} />
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
           <p className="type-caption text-[11px] text-ink-faint">
             {previewEnabled

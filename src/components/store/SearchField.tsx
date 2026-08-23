@@ -23,7 +23,10 @@ export function SearchField({ value, onChange, placeholder, results, shortcut }:
         target instanceof HTMLTextAreaElement ||
         (target instanceof HTMLElement && target.isContentEditable);
       if (typing) return;
-      if (event.key === "/" || ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k")) {
+      if (
+        event.key === "/" ||
+        ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k")
+      ) {
         event.preventDefault();
         ref.current?.focus();
       }

@@ -12,10 +12,7 @@ export function registerServiceWorker() {
           const installingWorker = reg.installing;
           if (installingWorker) {
             installingWorker.addEventListener("statechange", () => {
-              if (
-                installingWorker.state === "installed" &&
-                navigator.serviceWorker.controller
-              ) {
+              if (installingWorker.state === "installed" && navigator.serviceWorker.controller) {
                 // New update available
                 console.log("[PWA] New version ready.");
               }

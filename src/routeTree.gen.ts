@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as UnlockRouteImport } from './routes/unlock'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -29,6 +30,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UnlockRoute = UnlockRouteImport.update({
+  id: '/unlock',
+  path: '/unlock',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SSlugRoute = SSlugRouteImport.update({
   id: '/s/$slug',
   path: '/s/$slug',
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/home': typeof HomeRoute
   '/settings': typeof SettingsRoute
+  '/unlock': typeof UnlockRoute
   '/s/$slug': typeof SSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/home': typeof HomeRoute
   '/settings': typeof SettingsRoute
+  '/unlock': typeof UnlockRoute
   '/s/$slug': typeof SSlugRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,22 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/home': typeof HomeRoute
   '/settings': typeof SettingsRoute
+  '/unlock': typeof UnlockRoute
   '/s/$slug': typeof SSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/home' | '/settings' | '/s/$slug'
+  fullPaths: '/' | '/home' | '/settings' | '/unlock' | '/s/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/home' | '/settings' | '/s/$slug'
-  id: '__root__' | '/' | '/home' | '/settings' | '/s/$slug'
+  to: '/' | '/home' | '/settings' | '/unlock' | '/s/$slug'
+  id: '__root__' | '/' | '/home' | '/settings' | '/unlock' | '/s/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HomeRoute: typeof HomeRoute
   SettingsRoute: typeof SettingsRoute
+  UnlockRoute: typeof UnlockRoute
   SSlugRoute: typeof SSlugRoute
 }
 
@@ -92,6 +102,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/unlock': {
+      id: '/unlock'
+      path: '/unlock'
+      fullPath: '/unlock'
+      preLoaderRoute: typeof UnlockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/s/$slug': {
       id: '/s/$slug'
       path: '/s/$slug'
@@ -106,6 +123,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HomeRoute: HomeRoute,
   SettingsRoute: SettingsRoute,
+  UnlockRoute: UnlockRoute,
   SSlugRoute: SSlugRoute,
 }
 export const routeTree = rootRouteImport

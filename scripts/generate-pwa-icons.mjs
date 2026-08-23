@@ -36,8 +36,11 @@ function createPng(width, height, r, g, b, a) {
     for (let x = 0; x < width; x++) {
       const pxOffset = rowOffset + 1 + x * bytesPerPixel;
       // Background #07080a
-      let pr = 7, pg = 8, pb = 10, pa = 255;
-      
+      let pr = 7,
+        pg = 8,
+        pb = 10,
+        pa = 255;
+
       // Center icon vault bounding box (relative)
       const nx = x / width;
       const ny = y / height;
@@ -47,20 +50,31 @@ function createPng(width, height, r, g, b, a) {
 
       // Outer coral square
       if (Math.abs(dx) <= 0.23 && Math.abs(dy) <= 0.23) {
-        pr = 255; pg = 97; pb = 97;
+        pr = 255;
+        pg = 97;
+        pb = 97;
       }
       // Inner dark square
       if (Math.abs(dx) <= 0.15 && Math.abs(dy) <= 0.15) {
-        pr = 13; pg = 14; pb = 15;
+        pr = 13;
+        pg = 14;
+        pb = 15;
       }
       // Center coral circle
       if (dist <= 0.07) {
-        pr = 255; pg = 97; pb = 97;
+        pr = 255;
+        pg = 97;
+        pb = 97;
       }
       // Center inner crosshair
-      if ((Math.abs(dx) <= 0.015 && Math.abs(dy) <= 0.12) || (Math.abs(dy) <= 0.015 && Math.abs(dx) <= 0.12)) {
+      if (
+        (Math.abs(dx) <= 0.015 && Math.abs(dy) <= 0.12) ||
+        (Math.abs(dy) <= 0.015 && Math.abs(dx) <= 0.12)
+      ) {
         if (dist >= 0.07 && dist <= 0.12) {
-          pr = 255; pg = 97; pb = 97;
+          pr = 255;
+          pg = 97;
+          pb = 97;
         }
       }
 
@@ -109,17 +123,17 @@ const crcTable = [];
 for (let n = 0; n < 256; n++) {
   let c = n;
   for (let k = 0; k < 8; k++) {
-    c = (c & 1) ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
   }
   crcTable[n] = c;
 }
 
 function crc32(buf) {
-  let crc = 0xFFFFFFFF;
+  let crc = 0xffffffff;
   for (let i = 0; i < buf.length; i++) {
-    crc = crcTable[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+    crc = crcTable[(crc ^ buf[i]) & 0xff] ^ (crc >>> 8);
   }
-  return (crc ^ 0xFFFFFFFF) | 0;
+  return (crc ^ 0xffffffff) | 0;
 }
 
 fs.writeFileSync(path.join(publicDir, "icon-192.png"), createPng(192, 192));

@@ -4,7 +4,15 @@
       <stop offset="0%" stop-color="#ff8989"/>
       <stop offset="100%" stop-color="#ff6161"/>
     </linearGradient>
+    <radialGradient id="tileGlow" cx="50%" cy="0%" r="80%">
+      <stop offset="0%" stop-color="#ff6161" stop-opacity="0.16"/>
+      <stop offset="55%" stop-color="#ff6161" stop-opacity="0"/>
+    </radialGradient>
   </defs>
+
+  <rect width="512" height="512" rx="100" fill="#0d0d0d"/>
+  <rect width="512" height="512" rx="100" fill="url(#tileGlow)"/>
+
   <g transform="translate(256,227)">
     <ellipse cx="0" cy="100" rx="150" ry="50" fill="#242728"/>
     <ellipse cx="0" cy="29" rx="150" ry="50" fill="#3a3b3c"/>

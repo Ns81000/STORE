@@ -491,9 +491,7 @@ export async function applyOrder(
 /* ---------- svg library ---------- */
 
 export async function createSvg(name: string, url: string): Promise<string> {
-  const result = await db().execute(
-    "SELECT sort_order FROM svg_library ORDER BY sort_order DESC",
-  );
+  const result = await db().execute("SELECT sort_order FROM svg_library ORDER BY sort_order DESC");
   if (result.rows.length >= MAX_SVGS) {
     throw new Error(`The library holds ${MAX_SVGS} marks — delete one to add another.`);
   }
@@ -842,7 +840,7 @@ export async function refreshAllPreviews(sectionId?: string): Promise<number> {
         preview: await scrapePreview(item.url),
       })),
     );
-    
+
     const now = Date.now();
     const statements: InStatement[] = chunkResults.map(({ id, preview }) => ({
       sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
@@ -1033,7 +1031,7 @@ export async function importVault(payload: string): Promise<{ sections: number; 
   let svgs = 0;
 
   // Import SVGs with sanitization
-  for (const svg of (Array.isArray(parsed.svgs) ? parsed.svgs : [])) {
+  for (const svg of Array.isArray(parsed.svgs) ? parsed.svgs : []) {
     if (!svg || typeof svg !== "object") continue;
     const name = typeof svg.name === "string" ? svg.name.trim().slice(0, 40) : "";
     const url = typeof svg.url === "string" ? svg.url.trim() : "";
@@ -1044,7 +1042,7 @@ export async function importVault(payload: string): Promise<{ sections: number; 
   }
 
   // Import Sections & Links with sanitization
-  for (const section of (Array.isArray(parsed.sections) ? parsed.sections : [])) {
+  for (const section of Array.isArray(parsed.sections) ? parsed.sections : []) {
     if (!section || typeof section !== "object") continue;
     const name = typeof section.name === "string" ? section.name.trim().slice(0, 60) : "";
     if (!name) continue;
@@ -1056,7 +1054,7 @@ export async function importVault(payload: string): Promise<{ sections: number; 
     const created = await createSection(name, colorToken, svgUrl);
     sections += 1;
 
-    for (const asset of (Array.isArray(section.assets) ? section.assets : [])) {
+    for (const asset of Array.isArray(section.assets) ? section.assets : []) {
       if (!asset || typeof asset !== "object") continue;
       const assetUrl = typeof asset.url === "string" ? asset.url.trim() : "";
       if (!isHttpUrl(assetUrl)) continue;
@@ -1067,8 +1065,13 @@ export async function importVault(payload: string): Promise<{ sections: number; 
       const actionMode = asset.actionMode === "copy" ? "copy" : "open";
 
       const validRows = (Array.isArray(asset.rows) ? asset.rows : [])
-        .filter((row): row is { url: string; label?: string | null; svgUrl?: string | null; mode?: string } =>
-          Boolean(row && typeof row === "object" && typeof row.url === "string" && isHttpUrl(row.url))
+        .filter(
+          (
+            row,
+          ): row is { url: string; label?: string | null; svgUrl?: string | null; mode?: string } =>
+            Boolean(
+              row && typeof row === "object" && typeof row.url === "string" && isHttpUrl(row.url),
+            ),
         )
         .slice(0, 6)
         .map((row) => ({

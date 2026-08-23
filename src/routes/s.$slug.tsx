@@ -123,7 +123,7 @@ function SectionRoute() {
         label: "Refresh preview",
         onSelect: async () => {
           setRefreshingId(asset.id);
-          await refreshOne.mutateAsync({ data: { id: asset.id } });
+          await refreshOne.mutateAsync({ data: { id: asset.id, url: asset.url } });
           setRefreshingId(null);
           setToast("Preview refreshed");
         },

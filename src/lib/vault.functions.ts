@@ -6,6 +6,7 @@ import {
   idInput,
   importInput,
   recolorSectionInput,
+  refreshPreviewInput,
   refreshScopeInput,
   reorderAssetsInput,
   reorderInput,
@@ -27,6 +28,7 @@ import {
   recolorSection as recolorSectionRow,
   refreshAllPreviews,
   refreshPreviewFor,
+  scrapePreview,
   updateAsset as updateAssetRow,
   updateSection as updateSectionRow,
   updateSvg as updateSvgRow,
@@ -110,10 +112,10 @@ export const reorderAssets = createServerFn({ method: "POST" })
   });
 
 export const refreshPreview = createServerFn({ method: "POST" })
-  .inputValidator(idInput.parse)
+  .inputValidator(refreshPreviewInput.parse)
   .handler(async ({ data }) => {
     await requireUnlocked();
-    await refreshPreviewFor(data.id);
+    await refreshPreviewFor(data.id, data.url);
     return { ok: true as const };
   });
 
@@ -123,6 +125,13 @@ export const refreshPreviews = createServerFn({ method: "POST" })
     await requireUnlocked();
     const count = await refreshAllPreviews(data.sectionId ?? undefined);
     return { count };
+  });
+
+export const getPreviewData = createServerFn({ method: "POST" })
+  .validator((url: string) => url)
+  .handler(async ({ data }) => {
+    await requireUnlocked();
+    return scrapePreview(data);
   });
 
 export const createSvg = createServerFn({ method: "POST" })

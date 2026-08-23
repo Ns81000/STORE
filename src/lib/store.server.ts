@@ -297,6 +297,7 @@ export type AssetInput = {
   previewEnabled: boolean;
   actionMode: ActionMode;
   rows: readonly RowInput[];
+  prefetchedPreview?: ScrapeResult | undefined;
 };
 
 const INSERT_ASSET_ROW =
@@ -337,7 +338,30 @@ export async function insertAsset(input: AssetInput): Promise<string> {
     ...rowStatements(id, input.rows, now),
   ];
 
-  if (input.previewEnabled && screenshotUrl) {
+  if (input.previewEnabled && input.prefetchedPreview) {
+    statements.push({
+      sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(asset_id) DO UPDATE SET
+              og_title = excluded.og_title,
+              og_description = excluded.og_description,
+              og_image_url = excluded.og_image_url,
+              og_site_name = excluded.og_site_name,
+              status = excluded.status,
+              fetched_at = excluded.fetched_at,
+              error_message = excluded.error_message`,
+      args: [
+        id,
+        input.prefetchedPreview.ogTitle,
+        input.prefetchedPreview.ogDescription,
+        input.prefetchedPreview.ogImageUrl,
+        input.prefetchedPreview.ogSiteName,
+        input.prefetchedPreview.status,
+        now,
+        input.prefetchedPreview.errorMessage,
+      ],
+    });
+  } else if (input.previewEnabled && screenshotUrl) {
     statements.push({
       sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -389,7 +413,30 @@ export async function updateAsset(id: string, input: AssetInput): Promise<void> 
     ...rowStatements(id, input.rows, now),
   ];
 
-  if (input.previewEnabled && screenshotUrl) {
+  if (input.previewEnabled && input.prefetchedPreview) {
+    statements.push({
+      sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(asset_id) DO UPDATE SET
+              og_title = excluded.og_title,
+              og_description = excluded.og_description,
+              og_image_url = excluded.og_image_url,
+              og_site_name = excluded.og_site_name,
+              status = excluded.status,
+              fetched_at = excluded.fetched_at,
+              error_message = excluded.error_message`,
+      args: [
+        id,
+        input.prefetchedPreview.ogTitle,
+        input.prefetchedPreview.ogDescription,
+        input.prefetchedPreview.ogImageUrl,
+        input.prefetchedPreview.ogSiteName,
+        input.prefetchedPreview.status,
+        now,
+        input.prefetchedPreview.errorMessage,
+      ],
+    });
+  } else if (input.previewEnabled && screenshotUrl) {
     statements.push({
       sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -627,7 +674,7 @@ function prettyDomainTitle(url: string): string {
 
 async function fetchHtml(url: string): Promise<{ html: string; finalUrl: string } | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 9000);
+  const timer = setTimeout(() => controller.abort(), 4000);
   try {
     const response = await fetch(url, {
       signal: controller.signal,
@@ -786,7 +833,6 @@ export async function refreshAllPreviews(sectionId?: string): Promise<number> {
 
   // Scrape previews in parallel chunks of 4
   const BATCH_SIZE = 4;
-  const scrapedResults: { id: string; preview: ScrapeResult }[] = [];
 
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const chunk = items.slice(i, i + BATCH_SIZE);
@@ -796,35 +842,36 @@ export async function refreshAllPreviews(sectionId?: string): Promise<number> {
         preview: await scrapePreview(item.url),
       })),
     );
-    scrapedResults.push(...chunkResults);
+    
+    const now = Date.now();
+    const statements: InStatement[] = chunkResults.map(({ id, preview }) => ({
+      sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(asset_id) DO UPDATE SET
+              og_title = excluded.og_title,
+              og_description = excluded.og_description,
+              og_image_url = excluded.og_image_url,
+              og_site_name = excluded.og_site_name,
+              status = excluded.status,
+              fetched_at = excluded.fetched_at,
+              error_message = excluded.error_message`,
+      args: [
+        id,
+        preview.ogTitle,
+        preview.ogDescription,
+        preview.ogImageUrl,
+        preview.ogSiteName,
+        preview.status,
+        now,
+        preview.errorMessage,
+      ],
+    }));
+
+    // Write chunk updates immediately so partial progress is saved
+    // if the background function is terminated by serverless limits
+    await db().batch(statements, "write");
   }
 
-  const now = Date.now();
-  const statements: InStatement[] = scrapedResults.map(({ id, preview }) => ({
-    sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(asset_id) DO UPDATE SET
-            og_title = excluded.og_title,
-            og_description = excluded.og_description,
-            og_image_url = excluded.og_image_url,
-            og_site_name = excluded.og_site_name,
-            status = excluded.status,
-            fetched_at = excluded.fetched_at,
-            error_message = excluded.error_message`,
-    args: [
-      id,
-      preview.ogTitle,
-      preview.ogDescription,
-      preview.ogImageUrl,
-      preview.ogSiteName,
-      preview.status,
-      now,
-      preview.errorMessage,
-    ],
-  }));
-
-  // Write all preview updates in 1 single atomic transaction
-  await db().batch(statements, "write");
   return items.length;
 }
 

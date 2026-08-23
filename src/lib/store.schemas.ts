@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { MAX_ROWS, SECTION_COLORS } from "./store.types";
 
+export const scrapeResultSchema = z.object({
+  ogTitle: z.string().nullable(),
+  ogDescription: z.string().nullable(),
+  ogImageUrl: z.string().nullable(),
+  ogSiteName: z.string().nullable(),
+  status: z.enum(["ok", "failed"]),
+  errorMessage: z.string().nullable(),
+});
+
 export const unlockInput = z.object({ password: z.string().min(1).max(512) });
 
 export const idInput = z.object({ id: z.string().min(1).max(64) });
@@ -48,6 +57,7 @@ const assetFields = {
   previewEnabled: z.boolean(),
   actionMode: z.enum(["open", "copy"]),
   rows: z.array(rowInput).max(MAX_ROWS),
+  prefetchedPreview: scrapeResultSchema.optional(),
 };
 
 export const createAssetInput = z.object({
@@ -63,6 +73,11 @@ export const updateAssetInput = z.object({
 
 export const refreshScopeInput = z.object({
   sectionId: z.string().min(1).max(64).nullable(),
+});
+
+export const refreshPreviewInput = z.object({
+  id: z.string().min(1).max(64),
+  url: z.string().url().max(2048).optional(),
 });
 
 export const createSvgInput = z.object({

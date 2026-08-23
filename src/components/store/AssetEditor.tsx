@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowUpRight, Copy, Plus, Shapes, Trash2 } from "lucide-react";
-import { createAsset, updateAsset } from "@/lib/vault.functions";
+import { createAsset, updateAsset, getPreviewData, refreshPreview } from "@/lib/vault.functions";
 import { useVaultMutation } from "@/hooks/useVault";
 import {
   MAX_ROWS,
@@ -75,7 +75,30 @@ function Field({
 
   const create = useVaultMutation(useServerFn(createAsset));
   const update = useVaultMutation(useServerFn(updateAsset));
+  const getPreview = useServerFn(getPreviewData);
+  const refreshPreviewFn = useVaultMutation(useServerFn(refreshPreview));
   const pending = create.isPending || update.isPending;
+
+  const [prefetchedPreview, setPrefetchedPreview] = useState<any>(null);
+
+  const cleanUrl = url.trim();
+  const hasValidUrl = /^https?:\/\//i.test(cleanUrl);
+
+  useEffect(() => {
+    setPrefetchedPreview(null);
+    if (!open || !hasValidUrl || !previewEnabled || asset) return;
+
+    let active = true;
+    getPreview({ data: cleanUrl })
+      .then((res) => {
+        if (active) setPrefetchedPreview(res);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [cleanUrl, previewEnabled, open, asset, getPreview]);
 
   useEffect(() => {
     if (!open) return;
@@ -128,11 +151,18 @@ function Field({
         url: row.url.trim(),
         label: row.label?.trim() ? row.label.trim() : null,
       })),
+      prefetchedPreview: asset ? undefined : (prefetchedPreview ?? undefined),
     };
 
     try {
-      if (asset) await update.mutateAsync({ data: { id: asset.id, ...payload } });
-      else await create.mutateAsync({ data: payload });
+      if (asset) {
+        await update.mutateAsync({ data: { id: asset.id, ...payload } });
+      } else {
+        const { id } = await create.mutateAsync({ data: payload });
+        if (previewEnabled && !prefetchedPreview) {
+          refreshPreviewFn.mutateAsync({ data: { id } }).catch(() => {});
+        }
+      }
       onDone(asset ? "Link updated" : "Link added");
       onClose();
     } catch (cause) {
@@ -140,8 +170,6 @@ function Field({
     }
   };
 
-  const cleanUrl = url.trim();
-  const hasValidUrl = /^https?:\/\//i.test(cleanUrl);
   const domain = hasValidUrl ? domainOf(cleanUrl) : "example.com";
   const displayTitle =
     title.trim() ||
@@ -374,68 +402,68 @@ function Field({
           <div className="overflow-hidden rounded-xl bg-surface-2 elev-1">
             {previewEnabled ? (
               <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface">
-                {previewImageUrl ? (
-                  <img
-                    key={previewImageUrl}
-                    src={previewImageUrl}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    className="h-full w-full object-cover transition-transform duration-300"
-                  />
-                ) : (
-                  <div
-                    className="generated-cover flex h-full w-full flex-col items-center justify-center gap-2"
-                    style={{ ["--tone" as string]: toneForKey(domain) }}
+                {previewImageUrl && asset ? (
+                    <img
+                      key={previewImageUrl}
+                      src={previewImageUrl}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover transition-transform duration-300"
+                    />
+                  ) : (
+                    <div
+                      className="generated-cover flex h-full w-full flex-col items-center justify-center gap-2"
+                      style={{ ["--tone" as string]: toneForKey(domain) }}
+                    >
+                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-canvas/40 hairline-soft">
+                        {iconSvgUrl ? (
+                          <SvgMark url={iconSvgUrl} fallback={domain} size={24} />
+                        ) : (
+                          <span className="text-sm font-semibold" style={{ color: "var(--tone)" }}>
+                            {initialsOf(domain)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="type-caption">{domain}</span>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              <div className="flex flex-col gap-3 p-3.5">
+                <div className="flex items-start gap-2.5">
+                  <SvgMark url={iconSvgUrl} fallback={domain} size={22} className="mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="type-title-sm truncate">{displayTitle}</p>
+                    <p className="type-caption truncate">{domain}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <span
+                    className={`inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${
+                      actionMode === "copy"
+                        ? "bg-surface-3 text-ink"
+                        : "bg-accent text-on-accent"
+                    }`}
                   >
-                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-canvas/40 hairline-soft">
-                      {iconSvgUrl ? (
-                        <SvgMark url={iconSvgUrl} fallback={domain} size={24} />
+                    {actionMode === "copy" ? "Copy link" : "Open"}
+                  </span>
+                  {rows.map((row, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-surface-3 text-ink-subtle"
+                    >
+                      {row.svgUrl ? (
+                        <SvgMark url={row.svgUrl} fallback={row.label ?? "row"} size={15} />
+                      ) : row.mode === "copy" ? (
+                        <Copy size={13} />
                       ) : (
-                        <span className="text-sm font-semibold" style={{ color: "var(--tone)" }}>
-                          {initialsOf(domain)}
-                        </span>
+                        <ArrowUpRight size={13} />
                       )}
                     </span>
-                    <span className="type-caption">{domain}</span>
-                  </div>
-                )}
-              </div>
-            ) : null}
-            <div className="flex flex-col gap-3 p-3.5">
-              <div className="flex items-start gap-2.5">
-                <SvgMark url={iconSvgUrl} fallback={domain} size={22} className="mt-0.5" />
-                <div className="min-w-0">
-                  <p className="type-title-sm truncate">{displayTitle}</p>
-                  <p className="type-caption truncate">{domain}</p>
+                  ))}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                <span
-                  className={`inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md text-xs font-medium ${
-                    actionMode === "copy"
-                      ? "bg-surface-3 text-ink"
-                      : "bg-accent text-on-accent"
-                  }`}
-                >
-                  {actionMode === "copy" ? "Copy link" : "Open"}
-                </span>
-                {rows.map((row, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-surface-3 text-ink-subtle"
-                  >
-                    {row.svgUrl ? (
-                      <SvgMark url={row.svgUrl} fallback={row.label ?? "row"} size={15} />
-                    ) : row.mode === "copy" ? (
-                      <Copy size={13} />
-                    ) : (
-                      <ArrowUpRight size={13} />
-                    )}
-                  </span>
-                ))}
-              </div>
-            </div>
           </div>
           <p className="type-caption text-[11px] text-ink-faint">
             {previewEnabled

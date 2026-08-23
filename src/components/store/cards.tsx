@@ -165,38 +165,35 @@ type CoverProps = { asset: Asset; title: string; domain: string };
 /** Real OG art when we have it, otherwise a branded generated cover. */
 export function AssetCover({ asset, title, domain }: CoverProps) {
   const [broken, setBroken] = useState(false);
-  const [cacheBust, setCacheBust] = useState<number | null>(null);
+  const [fallback, setFallback] = useState(false);
   const rawImageUrl = asset.preview?.ogImageUrl;
 
   useEffect(() => {
     setBroken(false);
-    setCacheBust(null);
-
-    if (!rawImageUrl || !rawImageUrl.includes("mshots")) return undefined;
-
-    const timer = window.setTimeout(() => {
-      setCacheBust(Date.now());
-    }, 3200);
-    return () => window.clearTimeout(timer);
+    setFallback(false);
   }, [rawImageUrl]);
 
-  const imageUrl = rawImageUrl
-    ? cacheBust
-      ? `${rawImageUrl}${rawImageUrl.includes("?") ? "&" : "?"}_v=${cacheBust}`
-      : rawImageUrl
-    : null;
+  const screenshotUrl = `https://s0.wp.com/mshots/v1/${encodeURIComponent(asset.url)}?w=960`;
+  const isFallback = fallback && rawImageUrl && !rawImageUrl.includes("mshots");
+  const activeImageUrl = isFallback ? screenshotUrl : rawImageUrl;
 
-  const image = asset.previewEnabled && !broken ? imageUrl : null;
+  const image = asset.previewEnabled && !broken ? activeImageUrl : null;
 
   if (image) {
     return (
       <img
-        key={imageUrl ?? "img"}
+        key={activeImageUrl ?? "img"}
         src={image}
         alt=""
         loading="lazy"
         decoding="async"
-        onError={() => setBroken(true)}
+        onError={() => {
+          if (!isFallback && rawImageUrl && !rawImageUrl.includes("mshots")) {
+            setFallback(true);
+          } else {
+            setBroken(true);
+          }
+        }}
         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         style={{ transitionTimingFunction: "var(--ease-out-strong)" }}
       />

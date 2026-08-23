@@ -47,7 +47,7 @@ STORE is a single-tenant personal link repository and dashboard. Designed around
 
 | Layer | Technology | Brand Mark | Details |
 |---|---|:---:|---|
-| **Framework & SSR** | TanStack Start | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/react/default.svg" width="20" height="20" alt="React" /> | Server-side rendering, routing, full-stack typed functions |
+| **Framework & SSR** | TanStack Start | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/tanstack/default.svg" width="20" height="20" alt="React" /> | Server-side rendering, routing, full-stack typed functions |
 | **Frontend UI** | React 19 | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/react/default.svg" width="20" height="20" alt="React 19" /> | Modern component architecture, server actions, transitions |
 | **Language** | TypeScript | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/typescript/default.svg" width="20" height="20" alt="TypeScript" /> | Strict typing, zod schema validation, client-server sync |
 | **Styling** | Tailwind CSS v4 | <img src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/tailwindcss/default.svg" width="20" height="20" alt="Tailwind CSS" /> | Native CSS theme variables, tone glow tokens, glassmorphism |

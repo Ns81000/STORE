@@ -286,7 +286,6 @@ export function AssetCard({
 }: AssetCardProps) {
   const title = assetLabel(asset);
   const domain = domainOf(asset.url);
-  const description = asset.preview?.ogDescription;
 
   const controls = (
     <div className="flex shrink-0 items-center gap-0.5">
@@ -360,8 +359,6 @@ export function AssetCard({
           </div>
           {controls}
         </div>
-
-        {description ? <p className="type-caption line-clamp-2">{description}</p> : null}
 
         <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
           <PrimaryAction asset={asset} onToast={onToast} />

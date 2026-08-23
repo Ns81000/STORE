@@ -3,7 +3,6 @@ import { MAX_ROWS, SECTION_COLORS } from "./store.types";
 
 export const scrapeResultSchema = z.object({
   ogTitle: z.string().nullable(),
-  ogDescription: z.string().nullable(),
   ogImageUrl: z.string().nullable(),
   ogSiteName: z.string().nullable(),
   status: z.enum(["ok", "failed"]),

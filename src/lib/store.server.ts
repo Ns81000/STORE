@@ -98,7 +98,6 @@ function assetRecord(row: Row): AssetRecord {
 
 type PreviewRecord = {
   ogTitle: string | null;
-  ogDescription: string | null;
   ogImageUrl: string | null;
   ogSiteName: string | null;
   status: string;
@@ -109,7 +108,6 @@ type PreviewRecord = {
 function previewRecord(row: Row): PreviewRecord {
   return {
     ogTitle: optionalText(row["og_title"]),
-    ogDescription: optionalText(row["og_description"]),
     ogImageUrl: optionalText(row["og_image_url"]),
     ogSiteName: optionalText(row["og_site_name"]),
     status: requiredText(row["status"], "status"),
@@ -243,7 +241,6 @@ export async function loadVault(): Promise<Vault> {
       preview: cached
         ? {
             ogTitle: cached.ogTitle,
-            ogDescription: cached.ogDescription,
             ogImageUrl: cached.ogImageUrl,
             ogSiteName: cached.ogSiteName,
             status:
@@ -343,7 +340,7 @@ export async function insertAsset(input: AssetInput): Promise<string> {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id) DO UPDATE SET
               og_title = excluded.og_title,
-              og_description = excluded.og_description,
+              og_description = NULL,
               og_image_url = excluded.og_image_url,
               og_site_name = excluded.og_site_name,
               status = excluded.status,
@@ -352,7 +349,7 @@ export async function insertAsset(input: AssetInput): Promise<string> {
       args: [
         id,
         input.prefetchedPreview.ogTitle,
-        input.prefetchedPreview.ogDescription,
+        null,
         input.prefetchedPreview.ogImageUrl,
         input.prefetchedPreview.ogSiteName,
         input.prefetchedPreview.status,
@@ -366,7 +363,7 @@ export async function insertAsset(input: AssetInput): Promise<string> {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id) DO UPDATE SET
               og_title = excluded.og_title,
-              og_description = excluded.og_description,
+              og_description = NULL,
               og_image_url = excluded.og_image_url,
               og_site_name = excluded.og_site_name,
               status = excluded.status,
@@ -418,7 +415,7 @@ export async function updateAsset(id: string, input: AssetInput): Promise<void> 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id) DO UPDATE SET
               og_title = excluded.og_title,
-              og_description = excluded.og_description,
+              og_description = NULL,
               og_image_url = excluded.og_image_url,
               og_site_name = excluded.og_site_name,
               status = excluded.status,
@@ -427,7 +424,7 @@ export async function updateAsset(id: string, input: AssetInput): Promise<void> 
       args: [
         id,
         input.prefetchedPreview.ogTitle,
-        input.prefetchedPreview.ogDescription,
+        null,
         input.prefetchedPreview.ogImageUrl,
         input.prefetchedPreview.ogSiteName,
         input.prefetchedPreview.status,
@@ -441,7 +438,7 @@ export async function updateAsset(id: string, input: AssetInput): Promise<void> 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id) DO UPDATE SET
               og_title = COALESCE(preview_cache.og_title, excluded.og_title),
-              og_description = preview_cache.og_description,
+              og_description = NULL,
               og_image_url = CASE 
                 WHEN preview_cache.og_image_url IS NULL OR preview_cache.og_image_url LIKE '%mshots%' 
                 THEN excluded.og_image_url 
@@ -649,7 +646,6 @@ function absolute(value: string | null, base: string): string | null {
 
 export type ScrapeResult = {
   ogTitle: string | null;
-  ogDescription: string | null;
   ogImageUrl: string | null;
   ogSiteName: string | null;
   status: "ok" | "failed";
@@ -705,7 +701,6 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
   if (!isSafePublicUrl(url)) {
     return {
       ogTitle: null,
-      ogDescription: null,
       ogImageUrl: null,
       ogSiteName: null,
       status: "failed",
@@ -721,7 +716,6 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
     // Unreachable / SPA client-rendered host: return domain title and live screenshot preview
     return {
       ogTitle: domainTitle,
-      ogDescription: null,
       ogImageUrl: screenshotFallback,
       ogSiteName: null,
       status: "ok",
@@ -739,10 +733,6 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
     (titleTag ? decodeEntities(titleTag.replace(/<[^>]+>/g, "")) : null) ??
     (headingTag ? decodeEntities(headingTag.replace(/<[^>]+>/g, "")) : null) ??
     domainTitle;
-
-  const description =
-    metaContent(html, ["og:description", "twitter:description", "description"]) ??
-    jsonLdValue(html, ["description"]);
 
   const ogImage =
     absolute(
@@ -762,7 +752,6 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
 
   return {
     ogTitle: title.length > 0 ? title.slice(0, 200) : domainTitle,
-    ogDescription: description ? description.slice(0, 400) : null,
     ogImageUrl: ogImage || liveScreenshot,
     ogSiteName: metaContent(html, ["og:site_name", "application-name"]),
     status: "ok",
@@ -776,7 +765,7 @@ export async function storePreview(assetId: string, result: ScrapeResult): Promi
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(asset_id) DO UPDATE SET
             og_title = excluded.og_title,
-            og_description = excluded.og_description,
+            og_description = NULL,
             og_image_url = excluded.og_image_url,
             og_site_name = excluded.og_site_name,
             status = excluded.status,
@@ -785,7 +774,7 @@ export async function storePreview(assetId: string, result: ScrapeResult): Promi
     args: [
       assetId,
       result.ogTitle,
-      result.ogDescription,
+      null,
       result.ogImageUrl,
       result.ogSiteName,
       result.status,
@@ -843,7 +832,7 @@ export async function refreshAllPreviews(sectionId?: string): Promise<number> {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id) DO UPDATE SET
               og_title = excluded.og_title,
-              og_description = excluded.og_description,
+              og_description = NULL,
               og_image_url = excluded.og_image_url,
               og_site_name = excluded.og_site_name,
               status = excluded.status,
@@ -852,7 +841,7 @@ export async function refreshAllPreviews(sectionId?: string): Promise<number> {
       args: [
         id,
         preview.ogTitle,
-        preview.ogDescription,
+        null,
         preview.ogImageUrl,
         preview.ogSiteName,
         preview.status,

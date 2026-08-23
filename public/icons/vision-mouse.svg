@@ -1,0 +1,23 @@
+<svg width="516" height="524" viewBox="0 0 516 524" xmlns="http://www.w3.org/2000/svg">
+  <!-- background -->
+  <rect x="0" y="0" width="516" height="524" fill="#0d0e12"/>
+
+  <!-- outer ring -->
+  <circle cx="258" cy="248" r="205" fill="#2b2d33" stroke="#4a9eff" stroke-width="14"/>
+
+  <!-- middle ellipse ring -->
+  <ellipse cx="258" cy="248" rx="128" ry="98" fill="none" stroke="#4a9eff" stroke-width="10"/>
+
+  <!-- inner blue ellipse (iris) -->
+  <ellipse cx="258" cy="248" rx="58" ry="52" fill="#4a9eff"/>
+
+  <!-- pupil -->
+  <circle cx="258" cy="248" r="26" fill="#0d0e12"/>
+
+  <!-- highlight -->
+  <circle cx="266" cy="240" r="9" fill="#ffffff"/>
+
+  <!-- cursor arrow -->
+  <polygon points="358,318 358,455 392,415 415,458 438,445 413,402 452,395"
+           fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>
+</svg>

@@ -134,6 +134,7 @@ export function SectionModal({
           value={svgUrl}
           onChange={setSvgUrl}
           onOpenLibrary={onOpenLibrary}
+          compact
         />
       </div>
     </Modal>

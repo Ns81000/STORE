@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { IconButton } from "./primitives";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ const WIDTH = {
 /**
  * Centred command-style modal on tablet+, full-height sheet on phones.
  * Borderless: separation comes from surface steps and elevation.
+ * Portaled to document.body to prevent parent transform containment traps.
  */
 export function Modal({
   open,
@@ -36,6 +38,12 @@ export function Modal({
   width = "md",
   zIndex = "z-[70]",
 }: ModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -49,9 +57,9 @@ export function Modal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  const modalNode = (
     <div
       className={cn("fixed inset-0 flex items-end justify-center sm:items-center sm:p-6", zIndex)}
     >
@@ -89,4 +97,7 @@ export function Modal({
       </div>
     </div>
   );
+
+  return createPortal(modalNode, document.body);
 }
+

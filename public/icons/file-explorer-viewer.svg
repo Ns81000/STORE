@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="folderGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#73c0ff"/>
+      <stop offset="100%" stop-color="#1480f2"/>
+    </linearGradient>
+    <linearGradient id="backGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4ea3ee"/>
+      <stop offset="100%" stop-color="#1e71cc"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="100" height="100" rx="20" fill="transparent" />
+  
+  <path d="M10 25 C10 19, 15 14, 21 14 L40 14 C44 14, 46 16, 50 20 L58 28 C61 31, 64 32, 68 32 L80 32 C86 32, 91 37, 91 43 L91 80 C91 86, 86 91, 80 91 L21 91 C15 91, 10 86, 10 80 Z" fill="url(#backGradient)"/>
+  
+  <path d="M10 40 C10 34, 15 30, 21 30 L80 30 C86 30, 91 34, 91 40 L91 80 C91 86, 86 91, 80 91 L21 91 C15 91, 10 86, 10 80 Z" fill="url(#folderGradient)"/>
+  
+  <path d="M21 31 L80 31 C85 31, 89 34, 90 39 C90 39, 90 38, 90 38 C90 33, 85 29, 80 29 L21 29 C16 29, 11 33, 11 38 C11 38, 11 39, 11 39 C12 34, 16 31, 21 31 Z" fill="#ffffff" fill-opacity="0.2"/>
+</svg>

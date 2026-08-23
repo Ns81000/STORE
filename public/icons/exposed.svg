@@ -1,0 +1,36 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="roundedSquare">
+      <rect x="0" y="0" width="512" height="512" rx="115" ry="115"/>
+    </clipPath>
+    <linearGradient id="innerFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6472ff"/>
+      <stop offset="100%" stop-color="#5b68ee"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="512" height="512" rx="115" ry="115" fill="#0e0e12"/>
+
+  <g clip-path="url(#roundedSquare)" fill="none" stroke-linecap="round">
+
+    <!-- OUTER ARCH: long left leg, shorter right leg -->
+    <path d="M 138 405
+             C 140 260, 185 100, 254 100
+             C 316 100, 358 235, 366 345"
+          stroke="#262d4d" stroke-width="24"/>
+
+    <!-- MIDDLE ARCH -->
+    <path d="M 180 400
+             C 182 265, 214 160, 255 160
+             C 298 160, 320 260, 326 335"
+          stroke="#454f97" stroke-width="24"/>
+
+    <!-- INNER ARCH -->
+    <path d="M 224 392
+             C 226 300, 240 225, 256 225
+             C 272 225, 280 300, 283 375"
+          stroke="url(#innerFade)" stroke-width="24"/>
+
+  </g>
+</svg>

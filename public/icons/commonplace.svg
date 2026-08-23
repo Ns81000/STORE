@@ -1,0 +1,14 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#f5f5f7"/>
+  
+  <!-- Open book icon - minimalist flat design -->
+  <!-- Left page -->
+  <rect x="6" y="10" width="9" height="12" fill="#0071e3"/>
+  
+  <!-- Right page -->
+  <rect x="17" y="10" width="9" height="12" fill="#0071e3"/>
+  
+  <!-- Center binding shadow -->
+  <rect x="15" y="10" width="2" height="12" fill="#1d1d1f" opacity="0.15"/>
+</svg>

@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowUpRight, Copy, Globe, Grid, Plus, Search, Shapes, Trash2, X } from "lucide-react";
 import { createSvg, deleteSvg } from "@/lib/vault.functions";
 import { useVaultMutation } from "@/hooks/useVault";
-import { MAX_SVGS, type SvgIcon } from "@/lib/store.types";
+import { type SvgIcon } from "@/lib/store.types";
 import { Modal } from "./Modal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SvgMark } from "./SvgMark";
@@ -43,7 +43,7 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
   const remove = useVaultMutation(useServerFn(deleteSvg));
 
   const cleanUrl = url.trim();
-  const previewable = /^https?:\/\/\S+$/i.test(cleanUrl);
+  const previewable = /^https?:\/\/\S+$/i.test(cleanUrl) || cleanUrl.startsWith("/");
 
   const visible = useMemo(() => {
     const clean = query.trim().toLowerCase();
@@ -51,13 +51,10 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
     return svgs.filter((icon) => icon.name.toLowerCase().includes(clean));
   }, [svgs, query]);
 
-  const full = svgs.length >= MAX_SVGS;
-
   const submit = async () => {
     const cleanName = name.trim();
-    if (full) return setError(`The library holds ${MAX_SVGS} marks — delete one first.`);
     if (!cleanName) return setError("Name the mark.");
-    if (!previewable) return setError("Paste a full https:// URL.");
+    if (!previewable) return setError("Paste a full icon URL or path.");
     try {
       await add.mutateAsync({ data: { name: cleanName, url: cleanUrl } });
       setName("");
@@ -82,7 +79,7 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
       <div className="flex items-center justify-between">
         <span className="type-label text-ink-muted">Add New Mark</span>
         <span className="type-caption text-xs text-ink-faint">
-          {svgs.length}/{MAX_SVGS} marks
+          {svgs.length} marks saved
         </span>
       </div>
 
@@ -116,7 +113,7 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
           label="Image or SVG URL"
           value={url}
           inputMode="url"
-          placeholder="https://cdn.simpleicons.org/..."
+          placeholder="https://... or /icons/..."
           className="bg-surface-3"
           onChange={(event) => setUrl(event.target.value)}
           hint={error ?? (previewable ? "Preview loaded above" : undefined)}
@@ -162,9 +159,9 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
           size="md"
           className="w-full justify-center"
           onClick={() => void submit()}
-          disabled={add.isPending || full}
+          disabled={add.isPending}
         >
-          <Plus size={16} /> {full ? "Library Full" : "Add to Library"}
+          <Plus size={16} /> {add.isPending ? "Adding…" : "Add to Library"}
         </Button>
       </div>
     </div>
@@ -248,7 +245,7 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
       <Modal
         open={open}
         title="Mark Library"
-        subtitle={`${svgs.length} of ${MAX_SVGS} marks saved — reusable across sections, links and action rows.`}
+        subtitle={`${svgs.length} marks saved — reusable across sections, links and action rows.`}
         onClose={onClose}
         width="xl"
       >

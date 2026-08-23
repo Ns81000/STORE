@@ -4,7 +4,6 @@ export type SectionColor = (typeof SECTION_COLORS)[number];
 
 export const MAX_SECTIONS = 5;
 export const MAX_ROWS = 6;
-export const MAX_SVGS = 30;
 
 export type ActionMode = "open" | "copy";
 

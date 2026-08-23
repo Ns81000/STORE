@@ -14,19 +14,29 @@ export const unlockInput = z.object({ password: z.string().min(1).max(512) });
 
 export const idInput = z.object({ id: z.string().min(1).max(64) });
 
-const optionalUrl = z.string().trim().url().max(2048).nullable();
+export const svgUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2048)
+  .refine(
+    (val) => /^https?:\/\/\S+$/i.test(val) || val.startsWith("/"),
+    { message: "Must be a valid URL or path." }
+  );
+
+const optionalSvgUrl = svgUrlSchema.nullable();
 
 export const createSectionInput = z.object({
   name: z.string().trim().min(1).max(60),
   colorToken: z.enum(SECTION_COLORS).nullable(),
-  svgUrl: optionalUrl,
+  svgUrl: optionalSvgUrl,
 });
 
 export const updateSectionInput = z.object({
   id: z.string().min(1).max(64),
   name: z.string().trim().min(1).max(60),
   colorToken: z.enum(SECTION_COLORS),
-  svgUrl: optionalUrl,
+  svgUrl: optionalSvgUrl,
 });
 
 export const recolorSectionInput = z.object({
@@ -44,7 +54,7 @@ export const reorderAssetsInput = z.object({
 });
 
 const rowInput = z.object({
-  svgUrl: optionalUrl,
+  svgUrl: optionalSvgUrl,
   label: z.string().trim().max(40).nullable(),
   url: z.string().trim().url().max(2048),
   mode: z.enum(["open", "copy"]),
@@ -53,7 +63,7 @@ const rowInput = z.object({
 const assetFields = {
   url: z.string().trim().url().max(2048),
   title: z.string().trim().max(120).nullable(),
-  iconSvgUrl: optionalUrl,
+  iconSvgUrl: optionalSvgUrl,
   previewEnabled: z.boolean(),
   actionMode: z.enum(["open", "copy"]),
   rows: z.array(rowInput).max(MAX_ROWS),
@@ -82,13 +92,13 @@ export const refreshPreviewInput = z.object({
 
 export const createSvgInput = z.object({
   name: z.string().trim().min(1).max(40),
-  url: z.string().trim().url().max(2048),
+  url: svgUrlSchema,
 });
 
 export const updateSvgInput = z.object({
   id: z.string().min(1).max(64),
   name: z.string().trim().min(1).max(40),
-  url: z.string().trim().url().max(2048),
+  url: svgUrlSchema,
 });
 
 export const importInput = z.object({

@@ -3,7 +3,6 @@ import { db } from "./db.server";
 import { hashIp } from "./session.server";
 import {
   MAX_SECTIONS,
-  MAX_SVGS,
   SECTION_COLORS,
   coerceColor,
   domainOf,
@@ -491,10 +490,7 @@ export async function applyOrder(
 /* ---------- svg library ---------- */
 
 export async function createSvg(name: string, url: string): Promise<string> {
-  const result = await db().execute("SELECT sort_order FROM svg_library ORDER BY sort_order DESC");
-  if (result.rows.length >= MAX_SVGS) {
-    throw new Error(`The library holds ${MAX_SVGS} marks — delete one to add another.`);
-  }
+  const result = await db().execute("SELECT sort_order FROM svg_library ORDER BY sort_order DESC LIMIT 1");
   const top = result.rows[0];
   const id = newId();
   const now = Date.now();
@@ -1010,6 +1006,12 @@ function isHttpUrl(raw: string | undefined | null): boolean {
   }
 }
 
+function isHttpOrStaticUrl(raw: string | undefined | null): boolean {
+  if (!raw || typeof raw !== "string") return false;
+  if (raw.startsWith("/")) return true;
+  return isHttpUrl(raw);
+}
+
 export async function svgCount(): Promise<number> {
   const result = await db().execute("SELECT COUNT(*) AS count FROM svg_library");
   return requiredInteger(result.rows[0]?.["count"], "count");
@@ -1035,8 +1037,7 @@ export async function importVault(payload: string): Promise<{ sections: number; 
     if (!svg || typeof svg !== "object") continue;
     const name = typeof svg.name === "string" ? svg.name.trim().slice(0, 40) : "";
     const url = typeof svg.url === "string" ? svg.url.trim() : "";
-    if (!name || !isHttpUrl(url)) continue;
-    if ((await svgCount()) >= MAX_SVGS) break;
+    if (!name || !isHttpOrStaticUrl(url)) continue;
     await createSvg(name, url);
     svgs += 1;
   }
@@ -1048,7 +1049,7 @@ export async function importVault(payload: string): Promise<{ sections: number; 
     if (!name) continue;
     if ((await sectionCount()) >= MAX_SECTIONS) break;
 
-    const svgUrl = section.svgUrl && isHttpUrl(section.svgUrl) ? section.svgUrl : null;
+    const svgUrl = section.svgUrl && isHttpOrStaticUrl(section.svgUrl) ? section.svgUrl : null;
     const colorToken = SECTION_COLORS.find((c) => c === section.colorToken) ?? null;
 
     const created = await createSection(name, colorToken, svgUrl);
@@ -1060,7 +1061,8 @@ export async function importVault(payload: string): Promise<{ sections: number; 
       if (!isHttpUrl(assetUrl)) continue;
 
       const title = typeof asset.title === "string" ? asset.title.trim().slice(0, 120) : null;
-      const iconSvgUrl = asset.iconSvgUrl && isHttpUrl(asset.iconSvgUrl) ? asset.iconSvgUrl : null;
+      const iconSvgUrl =
+        asset.iconSvgUrl && isHttpOrStaticUrl(asset.iconSvgUrl) ? asset.iconSvgUrl : null;
       const previewEnabled = asset.previewEnabled !== false;
       const actionMode = asset.actionMode === "copy" ? "copy" : "open";
 
@@ -1075,7 +1077,7 @@ export async function importVault(payload: string): Promise<{ sections: number; 
         )
         .slice(0, 6)
         .map((row) => ({
-          svgUrl: row.svgUrl && isHttpUrl(row.svgUrl) ? row.svgUrl : null,
+          svgUrl: row.svgUrl && isHttpOrStaticUrl(row.svgUrl) ? row.svgUrl : null,
           label: typeof row.label === "string" ? row.label.trim().slice(0, 40) : null,
           url: row.url.trim(),
           mode: (row.mode === "copy" ? "copy" : "open") as ActionMode,

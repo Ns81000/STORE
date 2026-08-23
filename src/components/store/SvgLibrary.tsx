@@ -17,17 +17,50 @@ type SvgLibraryProps = {
 };
 
 const SUGGESTED_MARKS = [
-  { name: "GitHub", url: "https://cdn.simpleicons.org/github/white" },
-  { name: "YouTube", url: "https://cdn.simpleicons.org/youtube/ff0000" },
-  { name: "Notion", url: "https://cdn.simpleicons.org/notion/white" },
-  { name: "VS Code", url: "https://cdn.simpleicons.org/visualstudiocode/007acc" },
-  { name: "Figma", url: "https://cdn.simpleicons.org/figma" },
-  { name: "Discord", url: "https://cdn.simpleicons.org/discord/5865f2" },
-  { name: "Google", url: "https://cdn.simpleicons.org/google" },
-  { name: "X", url: "https://cdn.simpleicons.org/x/white" },
-  { name: "React", url: "https://cdn.simpleicons.org/react/61dafb" },
-  { name: "Tailwind", url: "https://cdn.simpleicons.org/tailwindcss/38bdf8" },
-  { name: "OpenAI", url: "https://cdn.simpleicons.org/openai/white" },
+  {
+    name: "GitHub",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/github/dark.svg",
+  },
+  {
+    name: "YouTube",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/youtube/default.svg",
+  },
+  {
+    name: "Notion",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/notion/default.svg",
+  },
+  {
+    name: "VS Code",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/visual-studio-code/default.svg",
+  },
+  {
+    name: "Figma",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/figma/default.svg",
+  },
+  {
+    name: "Discord",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/discord/default.svg",
+  },
+  {
+    name: "Google",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/google/default.svg",
+  },
+  {
+    name: "X",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/x-formerly-twitter/default.svg",
+  },
+  {
+    name: "React",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/react/dark.svg",
+  },
+  {
+    name: "Tailwind",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/tailwind-css/default.svg",
+  },
+  {
+    name: "OpenAI",
+    url: "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/openai/default.svg",
+  },
 ] as const;
 
 export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {

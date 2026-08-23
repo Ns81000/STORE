@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 .output
+Data.txt
+Work_2.txt
 .vinxi
 .tanstack/**
 Design.md

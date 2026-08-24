@@ -88,7 +88,7 @@ const cspMiddleware = createMiddleware().server(async ({ next }) => {
 // file opts out, so re-add it explicitly to keep server functions protected
 // from cross-site requests.
 const csrfMiddleware = createCsrfMiddleware({
-  filter: (ctx) => ctx.handlerType === "serverFn",
+  filter: (ctx) => ctx.handlerType === "serverFn" && ctx.request.method !== "GET",
 });
 
 export const startInstance = createStart(() => ({

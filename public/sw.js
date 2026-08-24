@@ -1,4 +1,4 @@
-const CACHE_NAME = "store-pwa-v2";
+const CACHE_NAME = "store-pwa-v3";
 const STATIC_ASSETS = [
   "/",
   "/home",
@@ -110,8 +110,13 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests and browser extensions
-  if (request.method !== "GET" || !url.protocol.startsWith("http")) {
+  // Skip non-GET requests, browser extensions, and server functions / RPCs
+  if (
+    request.method !== "GET" ||
+    !url.protocol.startsWith("http") ||
+    url.pathname.startsWith("/_serverFn") ||
+    request.headers.has("x-tsr-serverFn")
+  ) {
     return;
   }
 

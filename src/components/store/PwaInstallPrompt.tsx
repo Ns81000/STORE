@@ -16,6 +16,25 @@ interface BeforeInstallPromptEvent extends Event {
 const DISMISS_KEY = "store_pwa_install_dismissed_at";
 const DISMISS_DAYS = 14; // Don't show again for 14 days if dismissed
 
+// localStorage throws SecurityError in locked-down privacy modes/webviews —
+// treat persistence as best-effort and never let it crash the prompt.
+function readDismissedAt(): number | null {
+  try {
+    const raw = window.localStorage.getItem(DISMISS_KEY);
+    return raw === null ? null : Number.parseInt(raw, 10);
+  } catch {
+    return null;
+  }
+}
+
+function writeDismissedAt(): void {
+  try {
+    window.localStorage.setItem(DISMISS_KEY, Date.now().toString());
+  } catch {
+    // Persistence unavailable; the banner may simply reappear next visit.
+  }
+}
+
 export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
@@ -27,9 +46,9 @@ export function PwaInstallPrompt() {
     if (isStandalone()) return;
 
     // 2. Check if user recently dismissed
-    const dismissedAt = localStorage.getItem(DISMISS_KEY);
-    if (dismissedAt) {
-      const elapsed = Date.now() - parseInt(dismissedAt, 10);
+    const dismissedAt = readDismissedAt();
+    if (dismissedAt !== null && !Number.isNaN(dismissedAt)) {
+      const elapsed = Date.now() - dismissedAt;
       if (elapsed < DISMISS_DAYS * 24 * 60 * 60 * 1000) {
         return;
       }
@@ -38,26 +57,25 @@ export function PwaInstallPrompt() {
     const isAppleIos = isIos();
     setIosDevice(isAppleIos);
 
+    const timers: number[] = [];
+
     // 3. Listen for Chromium/Android install prompt
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       // Gentle delay after page load before displaying banner
-      window.setTimeout(() => setVisible(true), 2500);
+      timers.push(window.setTimeout(() => setVisible(true), 2500));
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstall);
 
     // If on iOS Safari, also gently show after delay
     if (isAppleIos) {
-      const timer = window.setTimeout(() => setVisible(true), 3500);
-      return () => {
-        window.clearTimeout(timer);
-        window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
-      };
+      timers.push(window.setTimeout(() => setVisible(true), 3500));
     }
 
     return () => {
+      for (const timer of timers) window.clearTimeout(timer);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstall);
     };
   }, []);
@@ -65,7 +83,7 @@ export function PwaInstallPrompt() {
   const dismiss = () => {
     setVisible(false);
     setShowIosInstructions(false);
-    localStorage.setItem(DISMISS_KEY, Date.now().toString());
+    writeDismissedAt();
   };
 
   const handleInstallClick = async () => {

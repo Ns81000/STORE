@@ -1,10 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ArrowRight, LockKeyhole, ShieldCheck } from "lucide-react";
-import { getSessionState, unlockStore } from "@/lib/auth.functions";
+import { getSessionState } from "@/lib/auth.functions";
 import { Lightfall } from "@/components/store/Lightfall";
 import { PasswordInput } from "@/components/store/primitives";
+import { useUnlockScreen } from "@/hooks/useUnlockScreen";
 
 export const Route = createFileRoute("/unlock")({
   head: () => ({
@@ -21,58 +20,15 @@ export const Route = createFileRoute("/unlock")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
+  beforeLoad: async () => {
+    const state = await getSessionState();
+    if (state.unlocked) throw redirect({ to: "/home" });
+  },
   component: LockScreen,
 });
 
-function formatWait(ms: number): string {
-  const minutes = Math.ceil(ms / 60000);
-  return minutes <= 1 ? "a minute" : `${minutes} minutes`;
-}
-
 function LockScreen() {
-  const navigate = useNavigate();
-  const unlock = useServerFn(unlockStore);
-  const session = useServerFn(getSessionState);
-  const [password, setPassword] = useState("");
-  const [pending, setPending] = useState(false);
-  const [revealing, setRevealing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [shake, setShake] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    void session().then((state) => {
-      if (active && state.unlocked) void navigate({ to: "/home" });
-    });
-    return () => {
-      active = false;
-    };
-  }, [session, navigate]);
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (pending || password.length === 0) return;
-    setPending(true);
-    setError(null);
-    try {
-      const result = await unlock({ data: { password } });
-      if (result.ok) {
-        // Curtain wipe carries the eye from lock screen into the vault.
-        setRevealing(true);
-        window.setTimeout(() => void navigate({ to: "/home" }), 420);
-        return;
-      }
-      setError(
-        result.lockedForMs > 0
-          ? `Too many attempts. Try again in ${formatWait(result.lockedForMs)}.`
-          : "Incorrect password",
-      );
-      setShake((value) => value + 1);
-      setPassword("");
-    } finally {
-      setPending(false);
-    }
-  };
+  const { password, setPassword, pending, revealing, error, shake, submit } = useUnlockScreen();
 
   return (
     <main className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden bg-canvas px-5 py-8 sm:px-8">
@@ -134,7 +90,8 @@ function LockScreen() {
             Keep it close.
           </p>
           <p className="type-body mt-4 max-w-md text-pretty text-ink-subtle">
-            A calm, password-protected place for the links, files, and tools you want one touch away.
+            A calm, password-protected place for the links, files, and tools you want one touch
+            away.
           </p>
         </div>
 

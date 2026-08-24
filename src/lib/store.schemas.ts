@@ -3,6 +3,7 @@ import { MAX_ROWS, SECTION_COLORS } from "./store.types";
 
 export const scrapeResultSchema = z.object({
   ogTitle: z.string().nullable(),
+  ogDescription: z.string().nullable(),
   ogImageUrl: z.string().nullable(),
   ogSiteName: z.string().nullable(),
   status: z.enum(["ok", "failed"]),
@@ -18,10 +19,17 @@ export const svgUrlSchema = z
   .trim()
   .min(1)
   .max(2048)
-  .refine(
-    (val) => /^https?:\/\/\S+$/i.test(val) || val.startsWith("/"),
-    { message: "Must be a valid URL or path." }
-  );
+  .refine((val) => /^https?:\/\/\S+$/i.test(val) || val.startsWith("/"), {
+    message: "Must be a valid URL or path.",
+  });
+
+/** Stored/fetched URLs must be http(s): zod's `.url()` alone admits `javascript:` and `data:`. */
+export const httpUrlSchema = z
+  .string()
+  .trim()
+  .url()
+  .max(2048)
+  .refine((val) => /^https?:\/\//i.test(val), { message: "Must be an http(s) URL." });
 
 const optionalSvgUrl = svgUrlSchema.nullable();
 
@@ -55,12 +63,12 @@ export const reorderAssetsInput = z.object({
 const rowInput = z.object({
   svgUrl: optionalSvgUrl,
   label: z.string().trim().max(40).nullable(),
-  url: z.string().trim().url().max(2048),
+  url: httpUrlSchema,
   mode: z.enum(["open", "copy"]),
 });
 
 const assetFields = {
-  url: z.string().trim().url().max(2048),
+  url: httpUrlSchema,
   title: z.string().trim().max(120).nullable(),
   iconSvgUrl: optionalSvgUrl,
   previewEnabled: z.boolean(),
@@ -82,11 +90,13 @@ export const updateAssetInput = z.object({
 
 export const refreshScopeInput = z.object({
   sectionId: z.string().min(1).max(64).nullable(),
+  offset: z.number().int().min(0).max(100_000).optional(),
+  limit: z.number().int().min(1).max(16).optional(),
 });
 
 export const refreshPreviewInput = z.object({
   id: z.string().min(1).max(64),
-  url: z.string().url().max(2048).optional(),
+  url: httpUrlSchema.optional(),
 });
 
 export const createSvgInput = z.object({

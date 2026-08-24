@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowUpRight, Copy, Plus, Shapes, Trash2 } from "lucide-react";
 import { createAsset, updateAsset, getPreviewData, refreshPreview } from "@/lib/vault.functions";
@@ -13,6 +14,7 @@ import {
   type SvgIcon,
 } from "@/lib/store.types";
 import type { RowValues } from "@/lib/store.schemas";
+import type { ScrapeResult } from "@/lib/store.server";
 import { Modal } from "./Modal";
 import { SvgMark } from "./SvgMark";
 import { SvgPicker } from "./SvgPicker";
@@ -24,7 +26,28 @@ const MODE_OPTIONS = [
   { value: "copy" as ActionMode, label: "Copy", icon: <Copy size={14} /> },
 ];
 
-const emptyRow = (): RowValues => ({ svgUrl: null, label: null, url: "", mode: "open" });
+type EditorRow = RowValues & { key: string };
+
+const newRowKey = (): string =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `row-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const emptyRow = (): EditorRow => ({
+  svgUrl: null,
+  label: null,
+  url: "",
+  mode: "open",
+  key: newRowKey(),
+});
+
+/**
+ * A URL worth spending a scrape on: scheme, a host with a dot, no stray
+ * trailing punctuation — typing "https://exa" shouldn't fire a request.
+ */
+function looksComplete(url: string): boolean {
+  return /^https?:\/\/[^\s./]+\.[^\s]{2,}$/i.test(url);
+}
 
 type AssetEditorProps = {
   open: boolean;
@@ -70,34 +93,44 @@ export function AssetEditor({
   const [iconSvgUrl, setIconSvgUrl] = useState<string | null>(null);
   const [previewEnabled, setPreviewEnabled] = useState(true);
   const [actionMode, setActionMode] = useState<ActionMode>("open");
-  const [rows, setRows] = useState<RowValues[]>([]);
-  const [activePickerRow, setActivePickerRow] = useState<number | null>(null);
+  const [rows, setRows] = useState<EditorRow[]>([]);
+  const [activePickerRow, setActivePickerRow] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const create = useVaultMutation(useServerFn(createAsset));
   const update = useVaultMutation(useServerFn(updateAsset));
   const getPreview = useServerFn(getPreviewData);
-  const refreshPreviewFn = useVaultMutation(useServerFn(refreshPreview));
+  const refreshPreviewFn = useServerFn(refreshPreview);
+  // Fire-and-forget scrape after a create: deliberately not a vault mutation,
+  // so it never invalidates/refetches while the user keeps browsing.
+  const backgroundPreview = useMutation({
+    mutationFn: (input: { data: { id: string } }) => refreshPreviewFn(input),
+  });
   const pending = create.isPending || update.isPending;
 
-  const [prefetchedPreview, setPrefetchedPreview] = useState<any>(null);
+  const [prefetchedPreview, setPrefetchedPreview] = useState<ScrapeResult | null>(null);
 
   const cleanUrl = url.trim();
   const hasValidUrl = /^https?:\/\//i.test(cleanUrl);
 
   useEffect(() => {
     setPrefetchedPreview(null);
-    if (!open || !hasValidUrl || !previewEnabled || asset) return;
+    if (!open || !previewEnabled || asset) return;
+    if (!looksComplete(cleanUrl)) return;
 
     let active = true;
-    getPreview({ data: cleanUrl })
-      .then((res) => {
-        if (active) setPrefetchedPreview(res);
-      })
-      .catch(() => {});
+    // Debounced so typing fires at most one scrape per pause.
+    const timer = window.setTimeout(() => {
+      getPreview({ data: cleanUrl })
+        .then((res) => {
+          if (active) setPrefetchedPreview(res);
+        })
+        .catch(() => {});
+    }, 700);
 
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [cleanUrl, previewEnabled, open, asset, getPreview]);
 
@@ -114,6 +147,7 @@ export function AssetEditor({
         label: row.label,
         url: row.url,
         mode: row.mode,
+        key: newRowKey(),
       })) ?? [],
     );
     setActivePickerRow(null);
@@ -148,9 +182,10 @@ export function AssetEditor({
       previewEnabled,
       actionMode,
       rows: rows.map((row) => ({
-        ...row,
-        url: row.url.trim(),
+        svgUrl: row.svgUrl,
         label: row.label?.trim() ? row.label.trim() : null,
+        url: row.url.trim(),
+        mode: row.mode,
       })),
       prefetchedPreview: asset ? undefined : (prefetchedPreview ?? undefined),
     };
@@ -161,7 +196,7 @@ export function AssetEditor({
       } else {
         const { id } = await create.mutateAsync({ data: payload });
         if (previewEnabled && !prefetchedPreview) {
-          refreshPreviewFn.mutateAsync({ data: { id } }).catch(() => {});
+          backgroundPreview.mutateAsync({ data: { id } }).catch(() => {});
         }
       }
       onDone(asset ? "Link updated" : "Link added");
@@ -296,7 +331,7 @@ export function AssetEditor({
             <div className="flex flex-col gap-2.5">
               {rows.map((row, index) => (
                 <div
-                  key={index}
+                  key={row.key}
                   className="animate-pop flex flex-col gap-2 rounded-xl bg-surface-2 p-3 hairline-soft"
                 >
                   {/* Row Top Bar: Label, Full Mode SegmentedControl, Delete button */}
@@ -315,8 +350,8 @@ export function AssetEditor({
                         label={`Delete row ${index + 1}`}
                         size="sm"
                         onClick={() => {
-                          if (activePickerRow === index) setActivePickerRow(null);
-                          setRows((current) => current.filter((_, i) => i !== index));
+                          if (activePickerRow === row.key) setActivePickerRow(null);
+                          setRows((current) => current.filter((r) => r.key !== row.key));
                         }}
                         className="h-8 w-8 text-ink-subtle hover:text-error"
                       >
@@ -330,13 +365,15 @@ export function AssetEditor({
                     <button
                       type="button"
                       title={row.svgUrl ? "Change row mark" : "Add row mark"}
-                      onClick={() => setActivePickerRow(activePickerRow === index ? null : index)}
+                      onClick={() =>
+                        setActivePickerRow(activePickerRow === row.key ? null : row.key)
+                      }
                       className={cn(
                         "press focus-ring inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors",
                         row.svgUrl
                           ? "bg-surface-3 hover:bg-surface-3/80"
                           : "border border-dashed border-hairline bg-surface-3/40 text-ink-faint hover:border-hairline-strong hover:text-ink",
-                        activePickerRow === index && "ring-1 ring-accent",
+                        activePickerRow === row.key && "ring-1 ring-accent",
                       )}
                     >
                       {row.svgUrl ? (
@@ -368,7 +405,7 @@ export function AssetEditor({
                   </div>
 
                   {/* Row Mark Picker (Inline) */}
-                  {activePickerRow === index ? (
+                  {activePickerRow === row.key ? (
                     <div className="animate-fade mt-1 rounded-lg bg-surface-3/90 p-2.5">
                       <SvgPicker
                         compact
@@ -450,9 +487,9 @@ export function AssetEditor({
                 >
                   {actionMode === "copy" ? "Copy link" : "Open"}
                 </span>
-                {rows.map((row, index) => (
+                {rows.map((row) => (
                   <span
-                    key={index}
+                    key={row.key}
                     className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-surface-3 text-ink-subtle"
                   >
                     {row.svgUrl ? (

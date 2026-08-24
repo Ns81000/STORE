@@ -3,6 +3,7 @@ import {
   createAssetInput,
   createSectionInput,
   createSvgInput,
+  httpUrlSchema,
   idInput,
   importInput,
   recolorSectionInput,
@@ -123,12 +124,16 @@ export const refreshPreviews = createServerFn({ method: "POST" })
   .validator((data: unknown) => refreshScopeInput.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
-    const count = await refreshAllPreviews(data.sectionId ?? undefined);
-    return { count };
+    const { count, remaining } = await refreshAllPreviews(
+      data.sectionId ?? undefined,
+      data.offset ?? 0,
+      data.limit ?? 8,
+    );
+    return { count, remaining };
   });
 
 export const getPreviewData = createServerFn({ method: "POST" })
-  .validator((url: string) => url)
+  .validator((data: unknown) => httpUrlSchema.parse(data))
   .handler(async ({ data }) => {
     await requireUnlocked();
     return scrapePreview(data);

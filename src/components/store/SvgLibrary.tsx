@@ -111,9 +111,7 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
     <div className="flex flex-col gap-4 rounded-xl bg-surface-2 p-4">
       <div className="flex items-center justify-between">
         <span className="type-label text-ink-muted">Add New Mark</span>
-        <span className="type-caption text-xs text-ink-faint">
-          {svgs.length} marks saved
-        </span>
+        <span className="type-caption text-xs text-ink-faint">{svgs.length} marks saved</span>
       </div>
 
       {/* Live Preview Card */}
@@ -338,8 +336,12 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
                 size="sm"
                 className="flex-1 justify-center"
                 onClick={async () => {
-                  await navigator.clipboard.writeText(inspecting.url);
-                  onDone("Mark URL copied");
+                  try {
+                    await navigator.clipboard.writeText(inspecting.url);
+                    onDone("Mark URL copied");
+                  } catch {
+                    onDone("Copy blocked by the browser");
+                  }
                 }}
               >
                 <Copy size={14} /> Copy URL
@@ -371,8 +373,12 @@ export function SvgLibrary({ open, svgs, onClose, onDone }: SvgLibraryProps) {
           if (!pendingDelete) return;
           const target = pendingDelete;
           setPendingDelete(null);
-          await remove.mutateAsync({ data: { id: target.id } });
-          onDone(`Deleted ${target.name}`);
+          try {
+            await remove.mutateAsync({ data: { id: target.id } });
+            onDone(`Deleted ${target.name}`);
+          } catch {
+            onDone("Couldn't delete the mark");
+          }
         }}
         onCancel={() => setPendingDelete(null)}
       />

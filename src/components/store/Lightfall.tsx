@@ -263,8 +263,13 @@ export function Lightfall({
 
     const mesh = new Mesh(gl, { geometry: new Triangle(gl), program });
 
+    const rectCache = { left: 0, top: 0, width: 1, height: 1 };
     const setSize = () => {
       const rect = container.getBoundingClientRect();
+      rectCache.left = rect.left;
+      rectCache.top = rect.top;
+      rectCache.width = Math.max(1, rect.width);
+      rectCache.height = Math.max(1, rect.height);
       renderer.setSize(Math.max(1, Math.floor(rect.width)), Math.max(1, Math.floor(rect.height)));
       // SAFETY: iResolution uniform is initialized above with Float32Array(2).
       const res = program.uniforms["iResolution"]!.value as Float32Array;
@@ -276,13 +281,15 @@ export function Lightfall({
     const ro = new ResizeObserver(setSize);
     ro.observe(container);
     setSize();
+    // Fixed backgrounds can scroll under the pointer without resizing; keep
+    // the cached rect aligned with the viewport on scroll too.
+    window.addEventListener("scroll", setSize, { passive: true });
 
     const current: [number, number] = [0.5, 0.5];
     const target: [number, number] = [0.5, 0.5];
     const onPointerMove = (event: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      target[0] = (event.clientX - rect.left) / rect.width;
-      target[1] = 1 - (event.clientY - rect.top) / rect.height;
+      target[0] = (event.clientX - rectCache.left) / rectCache.width;
+      target[1] = 1 - (event.clientY - rectCache.top) / rectCache.height;
     };
     const onPointerLeave = () => {
       target[0] = 0.5;
@@ -342,6 +349,7 @@ export function Lightfall({
       ro.disconnect();
       io.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("scroll", setSize);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerleave", onPointerLeave);
       try {

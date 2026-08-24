@@ -1,6 +1,7 @@
 import type { InStatement, Row, Value } from "@libsql/client";
 import { db } from "./db.server";
 import { hashIp } from "./session.server";
+import { isSafePublicUrl, resolveSafeUrl } from "./url-safety";
 import {
   MAX_SECTIONS,
   SECTION_COLORS,
@@ -18,9 +19,16 @@ import {
 const ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 export function newId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  // Rejection-sample so every character is uniformly likely (256 % 36 != 0).
   let out = "";
-  for (const byte of bytes) out += ALPHABET[byte % ALPHABET.length];
+  while (out.length < 16) {
+    const bytes = crypto.getRandomValues(new Uint8Array(20));
+    for (const byte of bytes) {
+      if (byte >= 252) continue;
+      out += ALPHABET[byte % ALPHABET.length]!;
+      if (out.length === 16) break;
+    }
+  }
   return out;
 }
 
@@ -98,6 +106,7 @@ function assetRecord(row: Row): AssetRecord {
 
 type PreviewRecord = {
   ogTitle: string | null;
+  ogDescription: string | null;
   ogImageUrl: string | null;
   ogSiteName: string | null;
   status: string;
@@ -108,6 +117,7 @@ type PreviewRecord = {
 function previewRecord(row: Row): PreviewRecord {
   return {
     ogTitle: optionalText(row["og_title"]),
+    ogDescription: optionalText(row["og_description"]),
     ogImageUrl: optionalText(row["og_image_url"]),
     ogSiteName: optionalText(row["og_site_name"]),
     status: requiredText(row["status"], "status"),
@@ -241,6 +251,7 @@ export async function loadVault(): Promise<Vault> {
       preview: cached
         ? {
             ogTitle: cached.ogTitle,
+            ogDescription: cached.ogDescription,
             ogImageUrl: cached.ogImageUrl,
             ogSiteName: cached.ogSiteName,
             status:
@@ -299,6 +310,21 @@ export type AssetInput = {
 const INSERT_ASSET_ROW =
   "INSERT INTO asset_rows (id, asset_id, svg_url, label, url, mode, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
+const PREVIEW_UPSERT_SQL = `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(asset_id) DO UPDATE SET
+        og_title = excluded.og_title,
+        og_description = excluded.og_description,
+        og_image_url = excluded.og_image_url,
+        og_site_name = excluded.og_site_name,
+        status = excluded.status,
+        fetched_at = excluded.fetched_at,
+        error_message = excluded.error_message`;
+
+function mshotsUrl(url: string): string {
+  return `https://s0.wp.com/mshots/v1/${encodeURIComponent(url)}?w=960`;
+}
+
 function rowStatements(assetId: string, rows: readonly RowInput[], now: number): InStatement[] {
   return rows.map((row, index) => ({
     sql: INSERT_ASSET_ROW,
@@ -310,9 +336,7 @@ export async function insertAsset(input: AssetInput): Promise<string> {
   const id = newId();
   const now = Date.now();
 
-  const screenshotUrl = isSafePublicUrl(input.url)
-    ? `https://s0.wp.com/mshots/v1/${encodeURIComponent(input.url)}?w=960`
-    : null;
+  const screenshotUrl = isSafePublicUrl(input.url) ? mshotsUrl(input.url) : null;
 
   const statements: InStatement[] = [
     {
@@ -336,20 +360,11 @@ export async function insertAsset(input: AssetInput): Promise<string> {
 
   if (input.previewEnabled && input.prefetchedPreview) {
     statements.push({
-      sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(asset_id) DO UPDATE SET
-              og_title = excluded.og_title,
-              og_description = NULL,
-              og_image_url = excluded.og_image_url,
-              og_site_name = excluded.og_site_name,
-              status = excluded.status,
-              fetched_at = excluded.fetched_at,
-              error_message = excluded.error_message`,
+      sql: PREVIEW_UPSERT_SQL,
       args: [
         id,
         input.prefetchedPreview.ogTitle,
-        null,
+        input.prefetchedPreview.ogDescription,
         input.prefetchedPreview.ogImageUrl,
         input.prefetchedPreview.ogSiteName,
         input.prefetchedPreview.status,
@@ -359,16 +374,7 @@ export async function insertAsset(input: AssetInput): Promise<string> {
     });
   } else if (input.previewEnabled && screenshotUrl) {
     statements.push({
-      sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(asset_id) DO UPDATE SET
-              og_title = excluded.og_title,
-              og_description = NULL,
-              og_image_url = excluded.og_image_url,
-              og_site_name = excluded.og_site_name,
-              status = excluded.status,
-              fetched_at = excluded.fetched_at,
-              error_message = excluded.error_message`,
+      sql: PREVIEW_UPSERT_SQL,
       args: [
         id,
         input.title || prettyDomainTitle(input.url),
@@ -388,9 +394,7 @@ export async function insertAsset(input: AssetInput): Promise<string> {
 
 export async function updateAsset(id: string, input: AssetInput): Promise<void> {
   const now = Date.now();
-  const screenshotUrl = isSafePublicUrl(input.url)
-    ? `https://s0.wp.com/mshots/v1/${encodeURIComponent(input.url)}?w=960`
-    : null;
+  const screenshotUrl = isSafePublicUrl(input.url) ? mshotsUrl(input.url) : null;
 
   const statements: InStatement[] = [
     {
@@ -411,20 +415,11 @@ export async function updateAsset(id: string, input: AssetInput): Promise<void> 
 
   if (input.previewEnabled && input.prefetchedPreview) {
     statements.push({
-      sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(asset_id) DO UPDATE SET
-              og_title = excluded.og_title,
-              og_description = NULL,
-              og_image_url = excluded.og_image_url,
-              og_site_name = excluded.og_site_name,
-              status = excluded.status,
-              fetched_at = excluded.fetched_at,
-              error_message = excluded.error_message`,
+      sql: PREVIEW_UPSERT_SQL,
       args: [
         id,
         input.prefetchedPreview.ogTitle,
-        null,
+        input.prefetchedPreview.ogDescription,
         input.prefetchedPreview.ogImageUrl,
         input.prefetchedPreview.ogSiteName,
         input.prefetchedPreview.status,
@@ -487,7 +482,9 @@ export async function applyOrder(
 /* ---------- svg library ---------- */
 
 export async function createSvg(name: string, url: string): Promise<string> {
-  const result = await db().execute("SELECT sort_order FROM svg_library ORDER BY sort_order DESC LIMIT 1");
+  const result = await db().execute(
+    "SELECT sort_order FROM svg_library ORDER BY sort_order DESC LIMIT 1",
+  );
   const top = result.rows[0];
   const id = newId();
   const now = Date.now();
@@ -520,24 +517,35 @@ export async function deleteSvg(id: string): Promise<void> {
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
+const MAX_GLOBAL_ATTEMPTS = 50;
+// Hashed like an IP so the row is indistinguishable from per-IP buckets.
+export const GLOBAL_LOCKOUT_KEY = "__global__";
 
-export async function lockoutRemainingMs(ip: string): Promise<number> {
+async function lockoutRemainingForKey(keyHash: string, max: number): Promise<number> {
   const result = await db().execute({
     sql: "SELECT attempted_at FROM login_attempts WHERE ip_hash = ? AND attempted_at >= ? ORDER BY attempted_at ASC",
-    args: [hashIp(ip), Date.now() - WINDOW_MS],
+    args: [keyHash, Date.now() - WINDOW_MS],
   });
   const attempts = result.rows.map((row) => requiredInteger(row["attempted_at"], "attempted_at"));
-  if (attempts.length < MAX_ATTEMPTS) return 0;
-  const oldest = attempts[attempts.length - MAX_ATTEMPTS] ?? Date.now();
+  if (attempts.length < max) return 0;
+  const oldest = attempts[attempts.length - max] ?? Date.now();
   return Math.max(0, oldest + WINDOW_MS - Date.now());
 }
 
-export async function recordFailedAttempt(ip: string): Promise<void> {
+export async function lockoutRemainingMs(ip: string): Promise<number> {
+  return lockoutRemainingForKey(hashIp(ip), MAX_ATTEMPTS);
+}
+
+export async function globalLockoutRemainingMs(): Promise<number> {
+  return lockoutRemainingForKey(hashIp(GLOBAL_LOCKOUT_KEY), MAX_GLOBAL_ATTEMPTS);
+}
+
+async function insertFailedAttempt(keyHash: string): Promise<void> {
   await db().batch(
     [
       {
         sql: "INSERT INTO login_attempts (ip_hash, attempted_at) VALUES (?, ?)",
-        args: [hashIp(ip), Date.now()],
+        args: [keyHash, Date.now()],
       },
       {
         sql: "DELETE FROM login_attempts WHERE attempted_at < ?",
@@ -548,32 +556,28 @@ export async function recordFailedAttempt(ip: string): Promise<void> {
   );
 }
 
+export async function recordFailedAttempt(ip: string): Promise<void> {
+  await insertFailedAttempt(hashIp(ip));
+}
+
+export async function recordGlobalFailedAttempt(): Promise<void> {
+  await insertFailedAttempt(hashIp(GLOBAL_LOCKOUT_KEY));
+}
+
 export async function clearAttempts(ip: string): Promise<void> {
-  await db().execute({ sql: "DELETE FROM login_attempts WHERE ip_hash = ?", args: [hashIp(ip)] });
+  // A successful unlock also clears the IP-agnostic budget: it exists to stop
+  // password guessing, so once the correct password is presented the accrued
+  // failures no longer protect anything.
+  await db().execute({
+    sql: "DELETE FROM login_attempts WHERE ip_hash IN (?, ?)",
+    args: [hashIp(ip), hashIp(GLOBAL_LOCKOUT_KEY)],
+  });
 }
 
 /* ---------- preview fetching (SSRF-guarded) ---------- */
 
-const PRIVATE_HOST = /^(localhost|0\.0\.0\.0|\[?::1\]?|.*\.local|.*\.internal)$/i;
-const PRIVATE_IPV4 =
-  /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/;
-
-export function isSafePublicUrl(raw: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-  const host = parsed.hostname;
-  if (PRIVATE_HOST.test(host)) return false;
-  if (PRIVATE_IPV4.test(host)) return false;
-  if (host.startsWith("[fd") || host.startsWith("[fe80")) return false;
-  return true;
-}
-
 const MAX_HTML_BYTES = 600_000;
+const MAX_REDIRECTS = 3;
 
 const BROWSER_HEADERS = {
   "user-agent":
@@ -646,6 +650,7 @@ function absolute(value: string | null, base: string): string | null {
 
 export type ScrapeResult = {
   ogTitle: string | null;
+  ogDescription: string | null;
   ogImageUrl: string | null;
   ogSiteName: string | null;
   status: "ok" | "failed";
@@ -662,45 +667,67 @@ function prettyDomainTitle(url: string): string {
   }
 }
 
-async function fetchHtml(url: string): Promise<{ html: string; finalUrl: string } | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: BROWSER_HEADERS,
-    });
-    const buffer = await response.arrayBuffer();
-    const slice = buffer.slice(0, MAX_HTML_BYTES);
-    const provisional = new TextDecoder("utf-8").decode(slice);
-    const charset = charsetOf(response.headers.get("content-type"), provisional);
-    let html = provisional;
-    if (charset !== "utf-8" && charset !== "utf8") {
-      try {
-        html = new TextDecoder(charset).decode(slice);
-      } catch {
-        html = provisional;
+async function fetchHtml(
+  url: string,
+  timeoutMs = 4000,
+): Promise<{ html: string; finalUrl: string } | null> {
+  const deadline = Date.now() + timeoutMs;
+  let current = url;
+  // Redirects are followed manually: every hop (including the initial URL)
+  // must re-pass the hostname screen and the resolved-address check, so a
+  // public URL cannot 302 into loopback or metadata endpoints.
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    const safe = await resolveSafeUrl(current);
+    if (!safe) return null;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), remaining);
+    try {
+      const response = await fetch(safe, {
+        signal: controller.signal,
+        redirect: "manual",
+        headers: BROWSER_HEADERS,
+      });
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get("location");
+        if (!location) return null;
+        current = new URL(location, safe).toString();
+        continue;
       }
+      const buffer = await response.arrayBuffer();
+      const slice = buffer.slice(0, MAX_HTML_BYTES);
+      const provisional = new TextDecoder("utf-8").decode(slice);
+      const charset = charsetOf(response.headers.get("content-type"), provisional);
+      let html = provisional;
+      if (charset !== "utf-8" && charset !== "utf8") {
+        try {
+          html = new TextDecoder(charset).decode(slice);
+        } catch {
+          html = provisional;
+        }
+      }
+      // 4xx/5xx pages still often carry usable metadata, so only bail when empty.
+      if (!response.ok && html.trim().length === 0) return null;
+      return { html, finalUrl: safe.toString() || url };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
     }
-    // 4xx/5xx pages still often carry usable metadata, so only bail when empty.
-    if (!response.ok && html.trim().length === 0) return null;
-    return { html, finalUrl: response.url || url };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
   }
+  return null;
 }
 
 /**
  * Robust preview: browser-identified fetch, then OG → Twitter → JSON-LD →
  * <title> → domain, with an icon fallback chain so a card always has a visual.
  */
-export async function scrapePreview(url: string): Promise<ScrapeResult> {
+export async function scrapePreview(url: string, timeoutMs = 4000): Promise<ScrapeResult> {
   if (!isSafePublicUrl(url)) {
     return {
       ogTitle: null,
+      ogDescription: null,
       ogImageUrl: null,
       ogSiteName: null,
       status: "failed",
@@ -708,14 +735,15 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
     };
   }
 
-  const screenshotFallback = `https://s0.wp.com/mshots/v1/${encodeURIComponent(url)}?w=960`;
-  const fetched = await fetchHtml(url);
+  const screenshotFallback = mshotsUrl(url);
+  const fetched = await fetchHtml(url, timeoutMs);
   const domainTitle = prettyDomainTitle(url);
 
   if (!fetched) {
     // Unreachable / SPA client-rendered host: return domain title and live screenshot preview
     return {
       ogTitle: domainTitle,
+      ogDescription: null,
       ogImageUrl: screenshotFallback,
       ogSiteName: null,
       status: "ok",
@@ -734,6 +762,10 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
     (headingTag ? decodeEntities(headingTag.replace(/<[^>]+>/g, "")) : null) ??
     domainTitle;
 
+  const description =
+    metaContent(html, ["og:description", "description", "twitter:description"]) ??
+    jsonLdValue(html, ["description"]);
+
   const ogImage =
     absolute(
       metaContent(html, [
@@ -748,10 +780,11 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
     absolute(jsonLdValue(html, ["image", "thumbnailUrl"]), finalUrl) ??
     absolute(metaContent(html, ["msapplication-TileImage"]), finalUrl);
 
-  const liveScreenshot = `https://s0.wp.com/mshots/v1/${encodeURIComponent(finalUrl || url)}?w=960`;
+  const liveScreenshot = mshotsUrl(finalUrl || url);
 
   return {
     ogTitle: title.length > 0 ? title.slice(0, 200) : domainTitle,
+    ogDescription: description ? description.slice(0, 400) : null,
     ogImageUrl: ogImage || liveScreenshot,
     ogSiteName: metaContent(html, ["og:site_name", "application-name"]),
     status: "ok",
@@ -761,20 +794,11 @@ export async function scrapePreview(url: string): Promise<ScrapeResult> {
 
 export async function storePreview(assetId: string, result: ScrapeResult): Promise<void> {
   await db().execute({
-    sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(asset_id) DO UPDATE SET
-            og_title = excluded.og_title,
-            og_description = NULL,
-            og_image_url = excluded.og_image_url,
-            og_site_name = excluded.og_site_name,
-            status = excluded.status,
-            fetched_at = excluded.fetched_at,
-            error_message = excluded.error_message`,
+    sql: PREVIEW_UPSERT_SQL,
     args: [
       assetId,
       result.ogTitle,
-      null,
+      result.ogDescription,
       result.ogImageUrl,
       result.ogSiteName,
       result.status,
@@ -799,63 +823,65 @@ export async function refreshPreviewFor(assetId: string, knownUrl?: string): Pro
   await storePreview(assetId, await scrapePreview(url));
 }
 
-export async function refreshAllPreviews(sectionId?: string): Promise<number> {
+/**
+ * Refreshes previews in bounded batches so each serverless invocation stays
+ * well under platform timeouts; the client loops until remaining hits zero.
+ */
+export async function refreshAllPreviews(
+  sectionId?: string,
+  offset = 0,
+  limit = 8,
+): Promise<{ count: number; remaining: number }> {
   const result = sectionId
     ? await db().execute({
-        sql: "SELECT id, url FROM assets WHERE preview_enabled = 1 AND section_id = ?",
+        sql: "SELECT id, url FROM assets WHERE preview_enabled = 1 AND section_id = ? ORDER BY sort_order, id",
         args: [sectionId],
       })
-    : await db().execute("SELECT id, url FROM assets WHERE preview_enabled = 1");
+    : await db().execute(
+        "SELECT id, url FROM assets WHERE preview_enabled = 1 ORDER BY sort_order, id",
+      );
 
   const items = result.rows.map((row) => ({
     id: requiredText(row["id"], "id"),
     url: requiredText(row["url"], "url"),
   }));
 
-  if (items.length === 0) return 0;
+  const slice = items.slice(offset, offset + limit);
 
-  // Scrape previews in parallel chunks of 4
-  const BATCH_SIZE = 4;
+  if (slice.length > 0) {
+    // Scrape in parallel chunks of 4 with a tighter timeout for bulk refresh.
+    const BATCH_SIZE = 4;
+    for (let i = 0; i < slice.length; i += BATCH_SIZE) {
+      const chunk = slice.slice(i, i + BATCH_SIZE);
+      const chunkResults = await Promise.all(
+        chunk.map(async (item) => ({
+          id: item.id,
+          preview: await scrapePreview(item.url, 2500),
+        })),
+      );
 
-  for (let i = 0; i < items.length; i += BATCH_SIZE) {
-    const chunk = items.slice(i, i + BATCH_SIZE);
-    const chunkResults = await Promise.all(
-      chunk.map(async (item) => ({
-        id: item.id,
-        preview: await scrapePreview(item.url),
-      })),
-    );
+      const now = Date.now();
+      const statements: InStatement[] = chunkResults.map(({ id, preview }) => ({
+        sql: PREVIEW_UPSERT_SQL,
+        args: [
+          id,
+          preview.ogTitle,
+          preview.ogDescription,
+          preview.ogImageUrl,
+          preview.ogSiteName,
+          preview.status,
+          now,
+          preview.errorMessage,
+        ],
+      }));
 
-    const now = Date.now();
-    const statements: InStatement[] = chunkResults.map(({ id, preview }) => ({
-      sql: `INSERT INTO preview_cache (asset_id, og_title, og_description, og_image_url, og_site_name, status, fetched_at, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(asset_id) DO UPDATE SET
-              og_title = excluded.og_title,
-              og_description = NULL,
-              og_image_url = excluded.og_image_url,
-              og_site_name = excluded.og_site_name,
-              status = excluded.status,
-              fetched_at = excluded.fetched_at,
-              error_message = excluded.error_message`,
-      args: [
-        id,
-        preview.ogTitle,
-        null,
-        preview.ogImageUrl,
-        preview.ogSiteName,
-        preview.status,
-        now,
-        preview.errorMessage,
-      ],
-    }));
-
-    // Write chunk updates immediately so partial progress is saved
-    // if the background function is terminated by serverless limits
-    await db().batch(statements, "write");
+      // Write chunk updates immediately so partial progress is saved
+      // if the background function is terminated by serverless limits
+      await db().batch(statements, "write");
+    }
   }
 
-  return items.length;
+  return { count: slice.length, remaining: Math.max(0, items.length - (offset + slice.length)) };
 }
 
 /* ---------- section mutations ---------- */
@@ -1006,7 +1032,19 @@ export async function svgCount(): Promise<number> {
   return requiredInteger(result.rows[0]?.["count"], "count");
 }
 
-export async function importVault(payload: string): Promise<{ sections: number; svgs: number }> {
+const MAX_IMPORT_ASSETS = 500;
+const MAX_IMPORT_ASSETS_PER_SECTION = 200;
+const IMPORT_BATCH_CHUNK = 250;
+
+async function batchChunked(statements: InStatement[]): Promise<void> {
+  for (let i = 0; i < statements.length; i += IMPORT_BATCH_CHUNK) {
+    await db().batch(statements.slice(i, i + IMPORT_BATCH_CHUNK), "write");
+  }
+}
+
+export async function importVault(
+  payload: string,
+): Promise<{ sections: number; svgs: number; skipped: number }> {
   let parsed: VaultBackup;
   try {
     parsed = JSON.parse(payload);
@@ -1018,36 +1056,95 @@ export async function importVault(payload: string): Promise<{ sections: number; 
     throw new Error("Invalid backup file: Root must be an object");
   }
 
-  let sections = 0;
-  let svgs = 0;
+  // Everything is computed in memory from a single initial read, so cap
+  // breaches abort before any write lands (no partial imports) and the
+  // restore costs a bounded number of round-trips instead of one per row.
+  const [sectionResult, svgTopResult] = await Promise.all([
+    db().execute("SELECT id, slug, color_token, sort_order FROM sections"),
+    db().execute("SELECT sort_order FROM svg_library ORDER BY sort_order DESC LIMIT 1"),
+  ]);
+
+  const takenSlugs = new Set(sectionResult.rows.map((row) => requiredText(row["slug"], "slug")));
+  const usedColors = new Set(sectionResult.rows.map((row) => String(row["color_token"])));
+  const roomForSections = Math.max(0, MAX_SECTIONS - sectionResult.rows.length);
+  let nextSectionOrder =
+    sectionResult.rows.reduce(
+      (max, row) => Math.max(max, requiredInteger(row["sort_order"], "sort_order")),
+      -1,
+    ) + 1;
+  let nextSvgOrder =
+    (svgTopResult.rows[0]
+      ? requiredInteger(svgTopResult.rows[0]["sort_order"], "sort_order")
+      : -1) + 1;
+
+  const now = Date.now();
+  const svgStatements: InStatement[] = [];
+  const sectionStatements: InStatement[] = [];
+  const assetStatements: InStatement[] = [];
 
   // Import SVGs with sanitization
+  let svgs = 0;
   for (const svg of Array.isArray(parsed.svgs) ? parsed.svgs : []) {
     if (!svg || typeof svg !== "object") continue;
     const name = typeof svg.name === "string" ? svg.name.trim().slice(0, 40) : "";
     const url = typeof svg.url === "string" ? svg.url.trim() : "";
     if (!name || !isHttpOrStaticUrl(url)) continue;
-    await createSvg(name, url);
+    svgStatements.push({
+      sql: "INSERT INTO svg_library (id, name, url, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      args: [newId(), name, url, nextSvgOrder, now, now],
+    });
+    nextSvgOrder += 1;
     svgs += 1;
   }
 
   // Import Sections & Links with sanitization
+  let sections = 0;
+  let skipped = 0;
+  let totalAssets = 0;
+
   for (const section of Array.isArray(parsed.sections) ? parsed.sections : []) {
     if (!section || typeof section !== "object") continue;
     const name = typeof section.name === "string" ? section.name.trim().slice(0, 60) : "";
     if (!name) continue;
-    if ((await sectionCount()) >= MAX_SECTIONS) break;
+    if (sections >= roomForSections) {
+      skipped += 1;
+      continue;
+    }
 
     const svgUrl = section.svgUrl && isHttpOrStaticUrl(section.svgUrl) ? section.svgUrl : null;
     const colorToken = SECTION_COLORS.find((c) => c === section.colorToken) ?? null;
 
-    const created = await createSection(name, colorToken, svgUrl);
+    const base = slugify(name);
+    let slug = base;
+    if (takenSlugs.has(base)) {
+      let suffix = 2;
+      while (takenSlugs.has(`${base}-${suffix}`)) suffix += 1;
+      slug = `${base}-${suffix}`;
+    }
+    takenSlugs.add(slug);
+
+    const color = colorToken ?? SECTION_COLORS.find((c) => !usedColors.has(c)) ?? SECTION_COLORS[0];
+    usedColors.add(color);
+
+    const sectionId = newId();
+    sectionStatements.push({
+      sql: "INSERT INTO sections (id, name, slug, color_token, svg_url, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      args: [sectionId, name, slug, color, svgUrl, nextSectionOrder, now, now],
+    });
+    nextSectionOrder += 1;
     sections += 1;
 
+    let sectionAssets = 0;
     for (const asset of Array.isArray(section.assets) ? section.assets : []) {
       if (!asset || typeof asset !== "object") continue;
       const assetUrl = typeof asset.url === "string" ? asset.url.trim() : "";
       if (!isHttpUrl(assetUrl)) continue;
+
+      if (totalAssets >= MAX_IMPORT_ASSETS || sectionAssets >= MAX_IMPORT_ASSETS_PER_SECTION) {
+        throw new Error(
+          `Backup too large: imports are capped at ${MAX_IMPORT_ASSETS_PER_SECTION} links per section and ${MAX_IMPORT_ASSETS} in total.`,
+        );
+      }
 
       const title = typeof asset.title === "string" ? asset.title.trim().slice(0, 120) : null;
       const iconSvgUrl =
@@ -1072,19 +1169,49 @@ export async function importVault(payload: string): Promise<{ sections: number; 
           mode: (row.mode === "copy" ? "copy" : "open") as ActionMode,
         }));
 
-      await insertAsset({
-        sectionId: created.id,
-        url: assetUrl,
-        title,
-        iconSvgUrl,
-        previewEnabled,
-        actionMode,
-        rows: validRows,
+      const id = newId();
+      assetStatements.push({
+        sql: `INSERT INTO assets (id, section_id, url, title, icon_svg_url, preview_enabled, action_mode, sort_order, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          id,
+          sectionId,
+          assetUrl,
+          title,
+          iconSvgUrl,
+          previewEnabled ? 1 : 0,
+          actionMode,
+          sectionAssets,
+          now,
+          now,
+        ],
       });
+      assetStatements.push(...rowStatements(id, validRows, now));
+      if (previewEnabled && isSafePublicUrl(assetUrl)) {
+        assetStatements.push({
+          sql: PREVIEW_UPSERT_SQL,
+          args: [
+            id,
+            title || prettyDomainTitle(assetUrl),
+            null,
+            mshotsUrl(assetUrl),
+            domainOf(assetUrl),
+            "ok",
+            now,
+            null,
+          ],
+        });
+      }
+      sectionAssets += 1;
+      totalAssets += 1;
     }
   }
 
-  return { sections, svgs };
+  await batchChunked(svgStatements);
+  await batchChunked(sectionStatements);
+  await batchChunked(assetStatements);
+
+  return { sections, svgs, skipped };
 }
 
 export async function wipeVaultData(): Promise<{ ok: true }> {

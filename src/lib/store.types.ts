@@ -11,6 +11,7 @@ export type PreviewStatus = "ok" | "failed" | "pending";
 
 export type Preview = {
   ogTitle: string | null;
+  ogDescription: string | null;
   ogImageUrl: string | null;
   ogSiteName: string | null;
   status: PreviewStatus;

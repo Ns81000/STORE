@@ -1,4 +1,5 @@
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
+import { createHash } from "node:crypto";
 
 import { renderErrorPage } from "./lib/error-page";
 
@@ -17,6 +18,72 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
   }
 });
 
+// TanStack Start emits one inline bootstrap script (the TSR dehydration
+// payload), whose content varies per render, so the CSP cannot carry a static
+// hash. Instead every HTML response gets hashes computed from the inline
+// scripts it actually contains — strict without 'unsafe-inline'.
+const CSP_DIRECTIVES = [
+  "default-src 'self'",
+  // Fonts are self-hosted (public/fonts, @font-face in styles.css); the inline
+  // allowance covers Tailwind's runtime style injections only.
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' data: blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+];
+
+function scriptHashes(html: string): string[] {
+  const hashes = new Set<string>();
+  for (const match of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const code = match[1];
+    if (code && code.trim().length > 0) {
+      hashes.add(`'sha256-${createHash("sha256").update(code, "utf8").digest("base64")}'`);
+    }
+  }
+  return [...hashes];
+}
+
+const isDev = process.env["NODE_ENV"] === "development";
+
+const cspMiddleware = createMiddleware().server(async ({ next }) => {
+  if (isDev) return next(); // Vite's HMR preamble needs inline scripts.
+  const result = await next();
+  const response = result.response;
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/html") && !contentType.includes("application/json")) {
+    return result;
+  }
+  const headers = new Headers(response.headers);
+  // GET server functions must never be satisfied from the browser cache.
+  headers.set("cache-control", "no-store");
+  if (contentType.includes("text/html")) {
+    const html = await response.text();
+    const hashes = scriptHashes(html);
+    headers.set(
+      "content-security-policy",
+      [
+        "default-src 'self'",
+        `script-src 'self'${hashes.length > 0 ? ` ${hashes.join(" ")}` : ""}`,
+        ...CSP_DIRECTIVES.slice(1),
+      ].join("; "),
+    );
+    return new Response(html, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+});
+
 // Start installs this automatically when src/start.ts is absent; defining the
 // file opts out, so re-add it explicitly to keep server functions protected
 // from cross-site requests.
@@ -25,5 +92,5 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [errorMiddleware, csrfMiddleware],
+  requestMiddleware: [errorMiddleware, cspMiddleware, csrfMiddleware],
 }));

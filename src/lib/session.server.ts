@@ -1,13 +1,19 @@
 import { useSession } from "@tanstack/react-start/server";
 import { createHash } from "node:crypto";
+import { requiredEnv } from "./env.server";
 
 export type StoreSession = { unlockedAt?: number };
 
 const NINETY_DAYS_SECONDS = 60 * 60 * 24 * 90;
+const RESEAL_INTERVAL_MS = 60 * 60 * 1000;
+
+function sessionSecret(): string {
+  return requiredEnv("SESSION_SECRET");
+}
 
 function sessionConfig() {
   return {
-    password: process.env["SESSION_SECRET"]!,
+    password: sessionSecret(),
     name: "store-session",
     maxAge: NINETY_DAYS_SECONDS,
     cookie: {
@@ -20,10 +26,12 @@ function sessionConfig() {
 }
 
 export async function readSession() {
+  // h3's useSession is a server request utility, not a React hook.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   return useSession<StoreSession>(sessionConfig());
 }
 
-/** Sliding 90-day window: every verified visit extends the session. */
+/** Sliding 90-day window: verified visits extend the session. */
 export async function currentSession(): Promise<StoreSession | null> {
   const session = await readSession();
   const unlockedAt = session.data.unlockedAt;
@@ -32,11 +40,16 @@ export async function currentSession(): Promise<StoreSession | null> {
     await session.clear();
     return null;
   }
-  await session.update({ unlockedAt: Date.now() });
+  // The cookie's maxAge already enforces the browser-side window; re-sealing
+  // runs a PBKDF2 derivation, so only refresh the timestamp hourly.
+  if (Date.now() - unlockedAt > RESEAL_INTERVAL_MS) {
+    await session.update({ unlockedAt: Date.now() });
+  }
   return { unlockedAt };
 }
 
 export class SessionExpiredError extends Error {
+  statusCode = 401;
   constructor() {
     super("session expired");
     this.name = "SessionExpiredError";
@@ -63,7 +76,5 @@ export function sessionExpiryFrom(unlockedAt: number): number {
 }
 
 export function hashIp(ip: string): string {
-  return createHash("sha256")
-    .update(`${process.env["SESSION_SECRET"]!}:${ip}`, "utf8")
-    .digest("hex");
+  return createHash("sha256").update(`${sessionSecret()}:${ip}`, "utf8").digest("hex");
 }

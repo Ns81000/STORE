@@ -1,11 +1,18 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { LockKeyhole, Plus, Settings, Shapes } from "lucide-react";
-import { useVault, useVaultMutation, useToast } from "@/hooks/useVault";
+import {
+  isSessionExpired,
+  useVault,
+  useVaultMutation,
+  useToast,
+  VAULT_KEY,
+} from "@/hooks/useVault";
 import { getSessionState } from "@/lib/auth.functions";
 import { deleteSection, reorderSections } from "@/lib/vault.functions";
-import { MAX_SECTIONS, type Section } from "@/lib/store.types";
+import { MAX_SECTIONS, type Section, type Vault } from "@/lib/store.types";
 import { SectionTile } from "@/components/store/cards";
 import { SectionModal } from "@/components/store/SectionModal";
 import { SvgLibrary } from "@/components/store/SvgLibrary";
@@ -50,9 +57,11 @@ const SPANS: Record<number, string[]> = {
 };
 
 function HomeRoute() {
-  const { vault, isPending } = useVault();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { vault, isPending, isError, error, refetch } = useVault();
   const { toast, setToast } = useToast();
-  const lock = useLock();
+  const lock = useLock(() => setToast("Couldn't lock — check your connection"));
 
   const [editing, setEditing] = useState<Section | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -67,14 +76,26 @@ function HomeRoute() {
   const atLimit = sections.length >= MAX_SECTIONS;
 
   const move = async (index: number, delta: number) => {
+    if (reorder.isPending) return;
     const next = [...sections];
-    const target = index + delta;
     const current = next[index];
-    const swap = next[target];
+    const swap = next[index + delta];
     if (!current || !swap) return;
     next[index] = swap;
-    next[target] = current;
-    await reorder.mutateAsync({ data: { ids: next.map((section) => section.id) } });
+    next[index + delta] = current;
+
+    // Optimistic: swap locally so tiles respond instantly; the mutation's
+    // onSettled invalidation reconciles with the server order.
+    const previous = queryClient.getQueryData<Vault>(VAULT_KEY);
+    queryClient.setQueryData<Vault>(VAULT_KEY, (currentVault) =>
+      currentVault ? { ...currentVault, sections: next } : currentVault,
+    );
+    try {
+      await reorder.mutateAsync({ data: { ids: next.map((section) => section.id) } });
+    } catch (cause) {
+      if (previous) queryClient.setQueryData(VAULT_KEY, previous);
+      if (!isSessionExpired(cause)) setToast("Couldn't move that section");
+    }
   };
 
   const menuFor = (section: Section, index: number): MenuItem[] => {
@@ -116,7 +137,7 @@ function HomeRoute() {
             <IconButton label="SVG library" onClick={() => setLibraryOpen(true)}>
               <Shapes size={18} />
             </IconButton>
-            <IconButton label="Settings" onClick={() => window.location.assign("/settings")}>
+            <IconButton label="Settings" onClick={() => void navigate({ to: "/settings" })}>
               <Settings size={18} />
             </IconButton>
             <IconButton label="Lock vault" onClick={() => void lock()}>
@@ -140,6 +161,12 @@ function HomeRoute() {
             <Skeleton key={index} className={`h-40 ${SPANS[5]?.[index] ?? ""}`} />
           ))}
         </div>
+      ) : isError && !isSessionExpired(error) ? (
+        <EmptyState
+          title="Couldn't load the vault"
+          body="STORE couldn't reach the server. Check your connection and try again."
+          action={<Button onClick={() => void refetch()}>Try again</Button>}
+        />
       ) : sections.length === 0 ? (
         <EmptyState
           title="Nothing stored yet"
@@ -189,8 +216,12 @@ function HomeRoute() {
           const target = pendingDelete;
           setPendingDelete(null);
           if (!target) return;
-          await removeSection.mutateAsync({ data: { id: target.id } });
-          setToast("Section deleted");
+          try {
+            await removeSection.mutateAsync({ data: { id: target.id } });
+            setToast("Section deleted");
+          } catch (cause) {
+            if (!isSessionExpired(cause)) setToast("Couldn't delete the section");
+          }
         }}
       />
       <Toast message={toast} />

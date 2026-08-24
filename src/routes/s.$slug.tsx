@@ -1,11 +1,19 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { LayoutGrid, LockKeyhole, Plus, RefreshCw, Rows3 } from "lucide-react";
-import { useStoredChoice, useToast, useVault, useVaultMutation } from "@/hooks/useVault";
+import {
+  isSessionExpired,
+  useStoredChoice,
+  useToast,
+  useVault,
+  useVaultMutation,
+  VAULT_KEY,
+} from "@/hooks/useVault";
 import { getSessionState } from "@/lib/auth.functions";
 import { deleteAsset, refreshPreview, refreshPreviews, reorderAssets } from "@/lib/vault.functions";
-import { assetLabel, type Asset } from "@/lib/store.types";
+import { assetLabel, type Asset, type Vault } from "@/lib/store.types";
 import { AssetCard } from "@/components/store/cards";
 import { SearchField } from "@/components/store/SearchField";
 import { PageBackdrop } from "@/components/store/PageBackdrop";
@@ -42,9 +50,10 @@ export const Route = createFileRoute("/s/$slug")({
 function SectionRoute() {
   const { slug } = Route.useParams();
   const navigate = useNavigate();
-  const { vault, isPending } = useVault();
+  const queryClient = useQueryClient();
+  const { vault, isPending, isError, error, refetch } = useVault();
   const { toast, setToast } = useToast();
-  const lock = useLock();
+  const lock = useLock(() => setToast("Couldn't lock — check your connection"));
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Asset | null>(null);
@@ -60,24 +69,11 @@ function SectionRoute() {
   const removeAsset = useVaultMutation(useServerFn(deleteAsset));
   const reorder = useVaultMutation(useServerFn(reorderAssets));
   const refreshOne = useVaultMutation(useServerFn(refreshPreview));
-  const refreshAll = useVaultMutation(useServerFn(refreshPreviews));
+  const refreshPreviewsFn = useServerFn(refreshPreviews);
+  const [refreshingAll, setRefreshingAll] = useState(false);
 
   const section = vault.sections.find((item) => item.slug === slug);
-
-  if (!isPending && !section) {
-    return (
-      <main className="mx-auto min-h-dvh w-full max-w-3xl px-5 pb-32">
-        <TopBar title="Not found" back={{ to: "/home", label: "Vault" }} />
-        <EmptyState
-          title="This section is gone"
-          body="It may have been renamed or deleted."
-          action={<Button onClick={() => void navigate({ to: "/home" })}>Back to vault</Button>}
-        />
-      </main>
-    );
-  }
-
-  const assets = section?.assets ?? [];
+  const assets = useMemo(() => section?.assets ?? [], [section]);
 
   // Search spans title, url, description and every action row label.
   const visible = useMemo(() => {
@@ -97,17 +93,93 @@ function SectionRoute() {
     );
   }, [assets, query]);
 
-  const move = async (index: number, delta: number) => {
-    if (!section) return;
-    const next = [...assets];
+  // A failed vault load must never masquerade as an empty/gone section.
+  if (!isPending && isError && !isSessionExpired(error)) {
+    return (
+      <main className="mx-auto min-h-dvh w-full max-w-3xl px-5 pb-32">
+        <TopBar title="Section" back={{ to: "/home", label: "Vault" }} />
+        <EmptyState
+          title="Couldn't load this section"
+          body="STORE couldn't reach the server. Check your connection and try again."
+          action={<Button onClick={() => void refetch()}>Try again</Button>}
+        />
+      </main>
+    );
+  }
+
+  if (!isPending && !section) {
+    return (
+      <main className="mx-auto min-h-dvh w-full max-w-3xl px-5 pb-32">
+        <TopBar title="Not found" back={{ to: "/home", label: "Vault" }} />
+        <EmptyState
+          title="This section is gone"
+          body="It may have been renamed or deleted."
+          action={<Button onClick={() => void navigate({ to: "/home" })}>Back to vault</Button>}
+        />
+      </main>
+    );
+  }
+
+  const swapAssets = (list: Asset[], index: number, delta: number): Asset[] => {
+    const next = [...list];
     const current = next[index];
     const swap = next[index + delta];
-    if (!current || !swap) return;
+    if (!current || !swap) return list;
     next[index] = swap;
     next[index + delta] = current;
-    await reorder.mutateAsync({
-      data: { sectionId: section.id, ids: next.map((asset) => asset.id) },
-    });
+    return next;
+  };
+
+  const move = async (index: number, delta: number) => {
+    if (!section || reorder.isPending) return;
+    const next = swapAssets(assets, index, delta);
+    if (next === assets) return;
+
+    // Optimistic: apply the swap locally so tiles respond instantly; the
+    // mutation's onSettled invalidation reconciles with the server order.
+    const previous = queryClient.getQueryData<Vault>(VAULT_KEY);
+    queryClient.setQueryData<Vault>(VAULT_KEY, (current) =>
+      current
+        ? {
+            ...current,
+            sections: current.sections.map((item) =>
+              item.id === section.id ? { ...item, assets: next } : item,
+            ),
+          }
+        : current,
+    );
+    try {
+      await reorder.mutateAsync({
+        data: { sectionId: section.id, ids: next.map((asset) => asset.id) },
+      });
+    } catch (cause) {
+      if (previous) queryClient.setQueryData(VAULT_KEY, previous);
+      if (!isSessionExpired(cause)) setToast("Couldn't move that link");
+    }
+  };
+
+  const refreshAllNow = async () => {
+    if (!section || refreshingAll) return;
+    setRefreshingAll(true);
+    try {
+      let offset = 0;
+      let total = 0;
+      // Bounded batches server-side; loop until the vault scope is exhausted.
+      for (;;) {
+        const { count, remaining } = await refreshPreviewsFn({
+          data: { sectionId: section.id, offset },
+        });
+        total += count;
+        if (remaining === 0) break;
+        offset += count;
+      }
+      await queryClient.invalidateQueries({ queryKey: VAULT_KEY });
+      setToast("Previews refreshed");
+    } catch (cause) {
+      if (!isSessionExpired(cause)) setToast("Couldn't refresh previews");
+    } finally {
+      setRefreshingAll(false);
+    }
   };
 
   const menuFor = (asset: Asset, index: number): MenuItem[] => {
@@ -123,9 +195,14 @@ function SectionRoute() {
         label: "Refresh preview",
         onSelect: async () => {
           setRefreshingId(asset.id);
-          await refreshOne.mutateAsync({ data: { id: asset.id, url: asset.url } });
-          setRefreshingId(null);
-          setToast("Preview refreshed");
+          try {
+            await refreshOne.mutateAsync({ data: { id: asset.id, url: asset.url } });
+            setToast("Preview refreshed");
+          } catch (cause) {
+            if (!isSessionExpired(cause)) setToast("Couldn't refresh this preview");
+          } finally {
+            setRefreshingId(null);
+          }
         },
       },
     ];
@@ -156,13 +233,10 @@ function SectionRoute() {
           <>
             <IconButton
               label="Refresh all previews"
-              onClick={async () => {
-                if (!section) return;
-                await refreshAll.mutateAsync({ data: { sectionId: section.id } });
-                setToast("Previews refreshed");
-              }}
+              disabled={refreshingAll}
+              onClick={() => void refreshAllNow()}
             >
-              <RefreshCw size={18} className={refreshAll.isPending ? "animate-spin" : undefined} />
+              <RefreshCw size={18} className={refreshingAll ? "animate-spin" : undefined} />
             </IconButton>
             <IconButton label="Lock vault" onClick={() => void lock()}>
               <LockKeyhole size={18} />
@@ -279,8 +353,12 @@ function SectionRoute() {
           const target = pendingDelete;
           setPendingDelete(null);
           if (!target) return;
-          await removeAsset.mutateAsync({ data: { id: target.id } });
-          setToast("Link deleted");
+          try {
+            await removeAsset.mutateAsync({ data: { id: target.id } });
+            setToast("Link deleted");
+          } catch (cause) {
+            if (!isSessionExpired(cause)) setToast("Couldn't delete the link");
+          }
         }}
       />
       <Toast message={toast} />

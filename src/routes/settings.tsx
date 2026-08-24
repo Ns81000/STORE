@@ -1,11 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import { Download, LockKeyhole, RefreshCw, Trash2, Upload } from "lucide-react";
 import { getSessionState } from "@/lib/auth.functions";
 import { exportVault, importVault, refreshPreviews, wipeVault } from "@/lib/vault.functions";
-import { useToast, useVault, VAULT_KEY } from "@/hooks/useVault";
+import { isSessionExpired, useToast, useVault, VAULT_KEY } from "@/hooks/useVault";
 import { BottomNav, OfflineBanner, TopBar, useLock } from "@/components/store/chrome";
 import { ConfirmDialog } from "@/components/store/ConfirmDialog";
 import { Button, Toast } from "@/components/store/primitives";
@@ -34,7 +34,15 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
-function Group({ label, children, danger }: { label: string; children: ReactNode; danger?: boolean }) {
+function Group({
+  label,
+  children,
+  danger,
+}: {
+  label: string;
+  children: ReactNode;
+  danger?: boolean;
+}) {
   return (
     <section className="flex flex-col gap-3">
       <h2 className={danger ? "type-label px-1 text-error" : "type-label px-1"}>{label}</h2>
@@ -56,7 +64,8 @@ function Row({ title, body, action }: { title: string; body: string; action: Rea
 }
 
 function SettingsPage() {
-  const lock = useLock();
+  const navigate = useNavigate();
+  const lock = useLock(() => setToast("Couldn't lock — check your connection"));
   const queryClient = useQueryClient();
   const { vault } = useVault();
   const { toast, setToast } = useToast();
@@ -69,13 +78,22 @@ function SettingsPage() {
   const [confirmWipeOpen, setConfirmWipeOpen] = useState(false);
 
   const refreshAll = async () => {
+    if (busy !== null) return;
     setBusy("refresh");
     try {
-      const { count } = await refreshFn({ data: { sectionId: null } });
-      setToast(`Refreshed ${count} ${count === 1 ? "preview" : "previews"}`);
+      let offset = 0;
+      let total = 0;
+      // Bounded batches server-side; loop until the whole vault is done.
+      for (;;) {
+        const { count, remaining } = await refreshFn({ data: { sectionId: null, offset } });
+        total += count;
+        if (remaining === 0) break;
+        offset += count;
+      }
       await queryClient.invalidateQueries({ queryKey: VAULT_KEY });
-    } catch {
-      setToast("Couldn't refresh previews");
+      setToast(`Refreshed ${total} ${total === 1 ? "preview" : "previews"}`);
+    } catch (cause) {
+      if (!isSessionExpired(cause)) setToast("Couldn't refresh previews");
     } finally {
       setBusy(null);
     }
@@ -102,18 +120,34 @@ function SettingsPage() {
     }
   };
 
+  // Zod validation failures serialize as a JSON array of issues — useless to a
+  // human. Map those (and anything else opaque) onto plain-English copy.
+  const importErrorMessage = (cause: unknown): string => {
+    if (!(cause instanceof Error)) return "Import failed";
+    if (cause.name === "ZodError" || cause.message.trim().startsWith("[")) {
+      return "That file doesn't look like a STORE backup.";
+    }
+    return cause.message || "Import failed";
+  };
+
   const restore = async (file: File) => {
-    if (file.size > 5 * 1024 * 1024) {
-      return setToast("File too large (max 5MB)");
+    // The server rejects payloads over 2MB; match that cap client-side so
+    // users get told before the upload instead of after a failed request.
+    if (file.size > 2 * 1024 * 1024) {
+      return setToast("File too large (max 2MB)");
     }
     setBusy("import");
     try {
       const payload = await file.text();
       const res = await importFn({ data: { payload } });
-      setToast(`Restored ${res.sections} sections and ${res.svgs} marks`);
+      const skippedNote =
+        res.skipped > 0
+          ? ` (${res.skipped} section${res.skipped === 1 ? "" : "s"} skipped — vault full)`
+          : "";
+      setToast(`Restored ${res.sections} sections and ${res.svgs} marks${skippedNote}`);
       await queryClient.invalidateQueries({ queryKey: VAULT_KEY });
     } catch (cause) {
-      setToast(cause instanceof Error ? cause.message : "Import failed");
+      if (!isSessionExpired(cause)) setToast(importErrorMessage(cause));
     } finally {
       setBusy(null);
       if (fileRef.current) fileRef.current.value = "";
@@ -241,7 +275,7 @@ function SettingsPage() {
         />
       </main>
 
-      <BottomNav active="settings" addLabel="Vault" onAdd={() => window.location.assign("/home")} />
+      <BottomNav active="settings" addLabel="Vault" onAdd={() => void navigate({ to: "/home" })} />
 
       <ConfirmDialog
         open={confirmWipeOpen}

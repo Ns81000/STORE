@@ -18,7 +18,7 @@
 
 ## Overview
 
-STORE is a single-tenant personal link repository and dashboard. Designed around high-density navigation, keyboard productivity, and refined dark-mode aesthetics, STORE eliminates clutter while offering structured multi-row actions, live metadata preview scraping, drag-and-drop hierarchy management, and an integrated SVG mark library.
+STORE is a single-tenant personal link repository and dashboard. Designed around high-density navigation, keyboard productivity, and refined dark-mode aesthetics, STORE eliminates clutter while offering structured multi-row actions, live metadata preview scraping, menu-driven reordering, and an integrated SVG mark library.
 
 ---
 
@@ -27,7 +27,7 @@ STORE is a single-tenant personal link repository and dashboard. Designed around
 ### Structure and Organization
 * **Section Hierarchy:** Segment links into dedicated workspaces with custom slug routing (`/s/:slug`), custom marks, and tone tokens (`ember`, `moss`, `steel`, `sand`, `rose`).
 * **Multi-Action Cards:** Each asset card supports a primary trigger (`Open` or `Copy`) plus up to 6 custom sub-action rows for secondary endpoints, APIs, deep links, or terminal commands.
-* **Drag-and-Drop Reordering:** Real-time tactile reordering of both sections and cards powered by `@dnd-kit`.
+* **Reordering:** Real-time tactile reordering of both sections and cards via per-card context menus ("Move up" / "Move down"), with optimistic UI updates and automatic rollback on failure.
 * **Centralized SVG Mark Library:** Manage, preview, search, and assign custom vector icons across sections, cards, and action rows without storage caps.
 
 ### Security and Authentication

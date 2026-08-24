@@ -100,4 +100,3 @@ export function Modal({
 
   return createPortal(modalNode, document.body);
 }
-

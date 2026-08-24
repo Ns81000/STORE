@@ -123,11 +123,23 @@ export function BottomNav({ onAdd, addLabel, active }: BottomNavProps) {
   );
 }
 
-export function useLock() {
+export function useLock(onError?: () => void) {
   const navigate = useNavigate();
   const lock = useServerFn(lockStore);
   return async () => {
-    await lock();
-    await navigate({ to: "/" });
+    let locked = false;
+    try {
+      await lock();
+      locked = true;
+    } catch {
+      // The session is still live — the vault must stay visibly unlocked.
+      onError?.();
+      return;
+    }
+    if (locked) {
+      // Tell the service worker to drop cached authenticated navigations.
+      navigator.serviceWorker?.controller?.postMessage("STORE_LOCKED");
+      await navigate({ to: "/" });
+    }
   };
 }

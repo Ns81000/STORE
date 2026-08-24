@@ -9,11 +9,11 @@ export const VAULT_KEY = ["vault"] as const;
 
 const EMPTY_VAULT: Vault = { sections: [], svgs: [] };
 
-/** The server throws SessionExpiredError once the signed cookie lapses. */
+/** The server throws SessionExpiredError (HTTP 401) once the signed cookie lapses. */
 export function isSessionExpired(error: unknown): boolean {
   if (!error) return false;
   const message = error instanceof Error ? error.message : String(error);
-  return /session expired|SessionExpiredError|Unauthorized/i.test(message);
+  return /\b401\b|session expired|SessionExpiredError|Unauthorized/i.test(message);
 }
 
 export function useVault() {
@@ -22,11 +22,12 @@ export function useVault() {
   const query = useQuery<Vault>({
     queryKey: VAULT_KEY,
     queryFn: () => fetchVault(),
-    // The vault is small and always mutated from this same tab: never serve a
-    // stale copy, or freshly added rows appear only after a hard refresh.
-    staleTime: 0,
+    // The vault is only mutated from this same tab, and every mutation
+    // invalidates immediately; a short staleness window keeps mounts from
+    // refetching while focus still picks up external changes promptly.
+    staleTime: 30_000,
     gcTime: 5 * 60_000,
-    refetchOnMount: "always",
+    refetchOnMount: true,
     refetchOnWindowFocus: true,
     retry: (count, error) => !isSessionExpired(error) && count < 2,
   });
@@ -80,12 +81,30 @@ export function useToast() {
   return { toast, setToast };
 }
 
+// localStorage throws SecurityError in locked-down privacy modes/webviews;
+// preferences silently fall back to memory there.
+function readStoredValue(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredValue(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore — persistence is unavailable.
+  }
+}
+
 /** Small localStorage-backed preference, read after hydration. */
 export function useStoredChoice<T extends string>(key: string, fallback: T, allowed: readonly T[]) {
   const [value, setValue] = useState<T>(fallback);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(key);
+    const saved = readStoredValue(key);
     if (saved && allowed.some((option) => option === saved)) setValue(saved as T);
     // `allowed` is a module-level constant at every call site.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,7 +112,7 @@ export function useStoredChoice<T extends string>(key: string, fallback: T, allo
 
   const choose = (next: T) => {
     setValue(next);
-    window.localStorage.setItem(key, next);
+    writeStoredValue(key, next);
   };
 
   return [value, choose] as const;

@@ -34,10 +34,11 @@ export function Menu({ items, label = "More actions", size = "md" }: MenuProps) 
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 640);
+    const query = window.matchMedia("(max-width: 639px)");
+    const check = () => setIsMobile(query.matches);
     check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    query.addEventListener("change", check);
+    return () => query.removeEventListener("change", check);
   }, []);
 
   useLayoutEffect(() => {

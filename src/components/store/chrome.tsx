@@ -123,6 +123,7 @@ export function BottomNav({ onAdd, addLabel, active }: BottomNavProps) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useLock(onError?: () => void) {
   const navigate = useNavigate();
   const lock = useServerFn(lockStore);

@@ -1,8 +1,5 @@
 const CACHE_NAME = "store-pwa-v3";
 const STATIC_ASSETS = [
-  "/",
-  "/home",
-  "/settings",
   "/manifest.webmanifest",
   "/favicon.ico",
   "/icon.svg",

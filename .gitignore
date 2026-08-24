@@ -37,3 +37,6 @@ STORE-build-spec.md
 *.njsproj
 *.sln
 *.sw?
+
+# Local verification tooling (regenerate with: uv venv .venv-verify)
+.venv-verify/
